@@ -9,19 +9,19 @@ OBJDUMP  = $(CROSS)-objdump
 
 ARCH     = -march=rv32i_zicsr -mabi=ilp32
 CFLAGS   = $(ARCH) -nostdlib -O2 -g -Wall -Wextra -Iinclude
-LDFLAGS  = $(ARCH) -nostdlib -T link.ld -Wl,-Map=build/minisoc.map
+LDFLAGS  = $(ARCH) -nostdlib -T link.ld
 
 BUILD    = build
-SRCS     = src/startup.S src/main.c
-OBJS     = $(BUILD)/startup.o $(BUILD)/main.o
-ELF      = $(BUILD)/minisoc.elf
-HEX      = $(BUILD)/minisoc.hex
-BIN      = $(BUILD)/minisoc.bin
-DUMP     = $(BUILD)/minisoc.dump
+PROG    ?= main
+TARGET   = $(BUILD)/$(PROG)
 
-.PHONY: all clean dump
+DEMOS    = main demo_blink demo_uart demo_spi demo_timer_irq self_test
 
-all: $(HEX)
+.PHONY: all clean dump demos
+
+all: $(BUILD)/minisoc.hex
+
+demos: $(foreach d, $(DEMOS), $(BUILD)/$(d).hex)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -29,22 +29,25 @@ $(BUILD):
 $(BUILD)/startup.o: src/startup.S | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/main.o: src/main.c | $(BUILD)
+$(BUILD)/%.o: src/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(ELF): $(OBJS)
-	$(CC) $(LDFLAGS) $(OBJS) -o $@
+$(BUILD)/%.elf: $(BUILD)/startup.o $(BUILD)/%.o
+	$(CC) $(LDFLAGS) -Wl,-Map=$(BUILD)/$*.map $^ -o $@
 
-$(BIN): $(ELF)
+$(BUILD)/%.bin: $(BUILD)/%.elf
 	$(OBJCOPY) -O binary $< $@
 
-$(HEX): $(BIN)
+$(BUILD)/%.hex: $(BUILD)/%.bin
 	python3 bin2hex.py $< $@ 1024
-	@echo "Firmware hex: $@"
+	@echo "Built: $@"
 
-dump: $(ELF)
-	$(OBJDUMP) -d -M numeric $< > $(DUMP)
-	@echo "Disassembly: $(DUMP)"
+$(BUILD)/minisoc.hex: $(BUILD)/main.hex
+	cp $< $@
+
+dump: $(BUILD)/$(PROG).elf
+	$(OBJDUMP) -d -M numeric $< > $(BUILD)/$(PROG).dump
+	@echo "Disassembly: $(BUILD)/$(PROG).dump"
 
 clean:
 	rm -rf $(BUILD)

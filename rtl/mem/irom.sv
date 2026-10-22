@@ -15,12 +15,19 @@ module irom #(
     input  logic        clk,
     input  logic        rst_n,
 
-    // Wishbone slave (read-only)
+    // Wishbone slave Port A (Instruction fetch from IMEM)
     input  logic [31:0] wb_adr,
     input  logic        wb_stb,
     input  logic        wb_cyc,
     output logic [31:0] wb_dat_i,
-    output logic        wb_ack
+    output logic        wb_ack,
+
+    // Wishbone slave Port B (Data fetch from DMEM for .rodata / constants)
+    input  logic [31:0] b_wb_adr = 32'd0,
+    input  logic        b_wb_stb = 1'b0,
+    input  logic        b_wb_cyc = 1'b0,
+    output logic [31:0] b_wb_dat_i,
+    output logic        b_wb_ack
 );
 
     logic [31:0] mem [0:MEM_DEPTH-1];
@@ -35,8 +42,13 @@ module irom #(
     end
 
     // Combinational read with immediate ack when selected
-    assign wb_dat_i = (wb_stb && wb_cyc) ? mem[wb_adr[11:2]] : 32'd0;
-    assign wb_ack   = wb_stb && wb_cyc && rst_n;
+    // Port A
+    assign wb_dat_i   = (wb_stb && wb_cyc) ? mem[wb_adr[11:2]] : 32'd0;
+    assign wb_ack     = wb_stb && wb_cyc && rst_n;
+
+    // Port B
+    assign b_wb_dat_i = (b_wb_stb && b_wb_cyc) ? mem[b_wb_adr[11:2]] : 32'd0;
+    assign b_wb_ack   = b_wb_stb && b_wb_cyc && rst_n;
 
 endmodule
 /* verilator lint_on UNUSEDSIGNAL */

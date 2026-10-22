@@ -9,6 +9,9 @@ module tb_irom;
 
     logic [31:0] wb_adr, wb_dat_i;
     logic        wb_stb, wb_cyc, wb_ack;
+    logic [31:0] b_wb_adr = 32'd0;
+    logic [31:0] b_wb_dat_i;
+    logic        b_wb_stb = 1'b0, b_wb_cyc = 1'b0, b_wb_ack;
 
     irom #(.MEM_FILE(""), .MEM_DEPTH(1024)) dut (.*);
 

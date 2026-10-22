@@ -88,22 +88,34 @@ module minisoc_top #(
     );
 
     // =========================================================================
-    // IMEM → IROM (direct, no interconnect needed)
+    // IMEM → IROM (Port A for instruction fetch, Port B for DMEM .rodata access)
     // =========================================================================
     logic [31:0] irom_dat_direct;
     logic        irom_ack_direct;
+
+    logic [31:0] irom_d_dat_i; logic irom_d_ack;
+    /* verilator lint_off UNUSEDSIGNAL */
+    logic [31:0] irom_d_adr;   logic [31:0] irom_d_dat_o; logic irom_d_we; logic [3:0] irom_d_sel; logic irom_d_stb, irom_d_cyc;
+    /* verilator lint_on UNUSEDSIGNAL */
 
     irom #(
         .MEM_FILE  (ROM_FILE),
         .MEM_DEPTH (1024)
     ) irom_inst (
-        .clk      (clk),
-        .rst_n    (rst_n),
-        .wb_adr   (imem_adr),
-        .wb_stb   (imem_stb),
-        .wb_cyc   (imem_cyc),
-        .wb_dat_i (irom_dat_direct),
-        .wb_ack   (irom_ack_direct)
+        .clk       (clk),
+        .rst_n     (rst_n),
+        // Port A (IMEM)
+        .wb_adr    (imem_adr),
+        .wb_stb    (imem_stb),
+        .wb_cyc    (imem_cyc),
+        .wb_dat_i  (irom_dat_direct),
+        .wb_ack    (irom_ack_direct),
+        // Port B (DMEM)
+        .b_wb_adr  (irom_d_adr),
+        .b_wb_stb  (irom_d_stb),
+        .b_wb_cyc  (irom_d_cyc),
+        .b_wb_dat_i(irom_d_dat_i),
+        .b_wb_ack  (irom_d_ack)
     );
 
     assign imem_dat_i = irom_dat_direct;
@@ -132,14 +144,6 @@ module minisoc_top #(
 
     logic [31:0] timer_dat_i;  logic timer_ack;
     logic [31:0] timer_adr_s;  logic [31:0] timer_dat_o_s;logic timer_we_s;logic [3:0] timer_sel_s;logic timer_stb_s,timer_cyc_s;
-
-    // Dummy IROM via DMEM (bus error for any write; decode handled by interconnect)
-    logic [31:0] irom_d_dat_i; logic irom_d_ack;
-    /* verilator lint_off UNUSEDSIGNAL */
-    logic [31:0] irom_d_adr;   logic [31:0] irom_d_dat_o; logic irom_d_we; logic [3:0] irom_d_sel; logic irom_d_stb, irom_d_cyc;
-    /* verilator lint_on UNUSEDSIGNAL */
-    assign irom_d_dat_i = 32'd0;
-    assign irom_d_ack   = irom_d_stb & irom_d_cyc; // instant ack (read returns 0)
 
     wb_interconnect ic (
         .clk          (clk),

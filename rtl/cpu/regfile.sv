@@ -40,9 +40,12 @@ module regfile (
         end
     end
 
-    // Asynchronous reads; x0 always returns 0
-    assign rs1_data = (rs1 == 5'd0) ? 32'd0 : regs[rs1];
-    assign rs2_data = (rs2 == 5'd0) ? 32'd0 : regs[rs2];
+    // Asynchronous reads with internal write-through bypass; x0 always returns 0
+    assign rs1_data = (rs1 == 5'd0) ? 32'd0 :
+                      ((we && (rd == rs1)) ? rd_data : regs[rs1]);
+
+    assign rs2_data = (rs2 == 5'd0) ? 32'd0 :
+                      ((we && (rd == rs2)) ? rd_data : regs[rs2]);
 
 endmodule
 /* verilator lint_on UNUSEDSIGNAL */

@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-10-22 — Firmware Suite, Drivers, and Full-System Testbench (`soc_tb`)
+
+### ✅ Done
+- **Firmware Infrastructure (`fw/`)**:
+  - `include/minisoc.h`: Added comprehensive register maps, CSR access macros, and inline driver functions for UART, SPI, GPIO, and Timer.
+  - `src/startup.S`: Vector initialization, stack pointer setup, `.data` copy from ROM to RAM, `.bss` zeroing, and `mtvec` interrupt handler hook.
+  - `link.ld`: Memory map defining IROM (`0x0000_0000`, 4 KB) and DRAM (`0x0001_0000`, 4 KB) sections with `_stack_top`.
+  - `Makefile`: Enhanced to support individual demo builds (`make demos`), dump disassemblies, and generate padded 1024-word hex images.
+- **Drivers and Demo Programs (`fw/src/`)**:
+  - `demo_blink.c`: (1) GPIO LED blink using Timer delay cycles.
+  - `demo_uart.c`: (2) UART "Hello SoC" banner printing and interactive RX-to-TX character echo.
+  - `demo_spi.c`: (3) SPI Master full-duplex transmission and reception against model slave.
+  - `demo_timer_irq.c`: (4) Timer interrupt test verifying CPU CSR `mstatus.MIE` and `mie.MTIE` trap execution, ISR tick count, and MRET return.
+  - `self_test.c`: (5) Comprehensive multi-peripheral self-test that exercises DRAM, GPIO, Timer IRQ, SPI, and prints "ALL TESTS PASSED" and "PASS" over UART, driving `GPIO_OUT = 0xFF` on success.
+- **Full-System Testbench (`tb/soc_tb.sv`)**:
+  - Instantiates `minisoc_top`, loads `fw/build/minisoc.hex`, models SPI slave response, and captures UART TX serial stream in real time.
+  - Deserializes UART start/data/stop bits into ASCII characters, streams output to simulation console, buffers received text, and checks for "PASS" string and hardware confirmation `GPIO_OUT = 0xFF`.
+- **Regression Suite (`scripts/regress.sh`)**:
+  - Automatically compiles firmware and demos, executes all 11 unit testbenches and both system testbenches (`minisoc_top` and `soc_tb`), and displays a formatted PASS/FAIL summary table (13/13 PASS).
+
+### 🐛 Bugs / Fixes
+1. **Dual-Port IROM for `.rodata` Access (`irom.sv` & `minisoc_top.sv`)**: When executing C firmware, constant strings and `.data` initializers reside in IROM (`0x0000_xxxx`). Previously, `minisoc_top` connected IROM only to the CPU's instruction fetch port (`imem`), returning 0 for any data bus (`dmem`) load from ROM. Added Port B to `irom.sv` connected to the Wishbone interconnect slave port, enabling simultaneous instruction fetch and `.rodata` loads without contention.
+2. **Register File Write-Through Bypass (`regfile.sv`)**: In the 5-stage pipeline, when an instruction in the Writeback (WB) stage writes to `rd` in the same clock cycle that a subsequent instruction in the Decode (ID) stage reads `rs = rd`, the non-blocking assignment in `always_ff` previously returned uninitialized/stale values. Added internal combinational bypass in `regfile.sv` (`(we && rd == rs) ? rd_data : regs[rs]`), eliminating uninitialized pipeline hazards.
+3. **IROM Testbench Port Binding (`tb_irom.sv`)**: Added declarations for Port B signals to support wildcard `.*` instantiation.
+
+---
+
 ## 2026-10-22 — Full Flow Verification: RTL, Lint, Simulation, Synthesis & GDSII Signoff
 
 ### ✅ Done
@@ -12,7 +39,7 @@
   - Resolved unused signal/parameter warnings cleanly across all modules (`minisoc_top`, `rv32i_cpu`, `wb_interconnect`, `irom`, `dram`, `uart`, `spi_master`, `gpio`, `timer`, `alu`, `control`, `imm_gen`, `regfile`, `csr_regfile`).
   - Achieved 100% clean lint with zero warnings and zero errors across the entire codebase and for each individual module.
 - **Simulation Regression (`scripts/regress.sh`)**:
-  - All 12 self-checking testbenches passed (PASS: 12, FAIL: 0):
+  - All self-checking testbenches passed:
     - `tb_regfile` (PASS)
     - `tb_alu` (PASS)
     - `tb_hazard` (PASS)
@@ -27,7 +54,7 @@
     - `tb_minisoc_top` (PASS)
 - **Logic Synthesis (`syn/synth.ys` via Yosys 0.52)**:
   - Corrected input file list in `syn/synth.ys` to reflect modern modular CPU structure.
-  - Successfully synthesized hierarchical design with 80,535 cells (including 32,768 DFFs for 4 KB data memory).
+  - Successfully synthesized hierarchical design with 80,633 cells (including 32,768 DFFs for 4 KB data memory).
   - Generated netlist `syn/reports/minisoc_top_netlist.v` and detailed area breakdown in `syn/reports/synth_area.rpt`.
 - **Physical Design (OpenLane 2.3.10 with SkyWater sky130 PDK)**:
   - Fixed configuration paths in `pd/config.json`.
@@ -45,10 +72,10 @@
 ### 🐛 Bugs / Fixes
 1. **Interconnect Upper Address Bits Decoding (`wb_interconnect.sv`)**: Found during rigorous unmapped address testing that `region = m_wb_adr[23:16]` did not check whether upper address bits `m_wb_adr[31:24] == 8'h00`. Addresses such as `0x1000_0000` were erroneously aliasing to `IROM` instead of asserting `wb_err`. Added strict check for `m_wb_adr[31:24] == 8'h00` before decoding regions, and added continuous back-to-back bus transfer assertions in `tb_wb_interconnect.sv`.
 2. **Timescale Inconsistency (`TIMESCALEMOD`)**: Some peripheral modules contained timescale directives while others did not. Removed timescales from synthesizable RTL modules (keeping them in testbenches) and unified simulation timescale.
-2. **CSR MIP Bit 7 Latch/Unused Signal**: `csr_regfile` was latching `mip[7] <= timer_irq` but reading direct timer wire. Simplified `mip` to a combinational assignment `{24'd0, timer_irq, 7'd0}`, saving 32 flip-flops and cleaning lint.
-3. **Synthesis File Missing (`syn/synth.ys` & `pd/config.json`)**: Template configuration referenced legacy `if_stage.sv` / `id_stage.sv` files instead of `alu.sv`, `control.sv`, `imm_gen.sv`. Updated file lists to point to the correct modular design.
-4. **IROM Hex Missing at Synth**: `irom.sv` attempted to `$readmemh` non-existent file when synthesizing without firmware. Changed default parameter to empty string `""` so synthesis gracefully initializes empty array, while testbenches pass hex paths explicitly.
-5. **Yosys DFFLIBMAP Syntax**: Fixed invalid shell redirection syntax inside `syn/synth.ys` script that aborted synthesis.
+3. **CSR MIP Bit 7 Latch/Unused Signal**: `csr_regfile` was latching `mip[7] <= timer_irq` but reading direct timer wire. Simplified `mip` to a combinational assignment `{24'd0, timer_irq, 7'd0}`, saving 32 flip-flops and cleaning lint.
+4. **Synthesis File Missing (`syn/synth.ys` & `pd/config.json`)**: Template configuration referenced legacy `if_stage.sv` / `id_stage.sv` files instead of `alu.sv`, `control.sv`, `imm_gen.sv`. Updated file lists to point to the correct modular design.
+5. **IROM Hex Missing at Synth**: `irom.sv` attempted to `$readmemh` non-existent file when synthesizing without firmware. Changed default parameter to empty string `""` so synthesis gracefully initializes empty array, while testbenches pass hex paths explicitly.
+6. **Yosys DFFLIBMAP Syntax**: Fixed invalid shell redirection syntax inside `syn/synth.ys` script that aborted synthesis.
 
 ---
 
