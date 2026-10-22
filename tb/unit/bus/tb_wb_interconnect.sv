@@ -101,6 +101,69 @@ module tb_wb_interconnect;
         // Unmapped → error
         do_read(32'h0006_0000, 32'd0, 1);          // unmapped
         do_read(32'hFFFF_0000, 32'd0, 1);          // unmapped
+        do_read(32'h1000_0000, 32'd0, 1);          // unmapped
+
+        // --- Back-to-back continuous transfers without deasserting stb/cyc ---
+        @(negedge clk);
+        m_stb = 1; m_cyc = 1; m_we = 0; m_sel = 4'hF;
+
+        // Cycle 1: IROM
+        m_adr = 32'h0000_0010;
+        @(posedge clk); #1;
+        if (!m_ack || m_dat_i !== 32'h1111_1111) begin
+            $display("FAIL [ic]: back-to-back IROM access failed"); errors++;
+        end
+
+        // Cycle 2: DRAM immediately next cycle
+        @(negedge clk);
+        m_adr = 32'h0001_0020;
+        @(posedge clk); #1;
+        if (!m_ack || m_dat_i !== 32'h2222_2222) begin
+            $display("FAIL [ic]: back-to-back DRAM access failed"); errors++;
+        end
+
+        // Cycle 3: UART immediately next cycle
+        @(negedge clk);
+        m_adr = 32'h0002_0008;
+        @(posedge clk); #1;
+        if (!m_ack || m_dat_i !== 32'h3333_3333) begin
+            $display("FAIL [ic]: back-to-back UART access failed"); errors++;
+        end
+
+        // Cycle 4: SPI immediately next cycle
+        @(negedge clk);
+        m_adr = 32'h0003_0004;
+        @(posedge clk); #1;
+        if (!m_ack || m_dat_i !== 32'h4444_4444) begin
+            $display("FAIL [ic]: back-to-back SPI access failed"); errors++;
+        end
+
+        // Cycle 5: GPIO immediately next cycle
+        @(negedge clk);
+        m_adr = 32'h0004_0000;
+        @(posedge clk); #1;
+        if (!m_ack || m_dat_i !== 32'h5555_5555) begin
+            $display("FAIL [ic]: back-to-back GPIO access failed"); errors++;
+        end
+
+        // Cycle 6: TIMER immediately next cycle
+        @(negedge clk);
+        m_adr = 32'h0005_000C;
+        @(posedge clk); #1;
+        if (!m_ack || m_dat_i !== 32'h6666_6666) begin
+            $display("FAIL [ic]: back-to-back TIMER access failed"); errors++;
+        end
+
+        // Cycle 7: Back-to-back unmapped address immediately after TIMER
+        @(negedge clk);
+        m_adr = 32'h0007_0000;
+        @(posedge clk); #1;
+        if (!m_err || m_ack) begin
+            $display("FAIL [ic]: back-to-back decode error detection failed"); errors++;
+        end
+
+        @(negedge clk);
+        m_stb = 0; m_cyc = 0;
 
         // No transaction: no ack, no err
         @(negedge clk);

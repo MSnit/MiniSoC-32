@@ -108,15 +108,17 @@ module wb_interconnect (
         sel_gpio  = 1'b0;
         sel_timer = 1'b0;
 
-        case (region)
-            8'h00: sel_irom  = 1'b1;
-            8'h01: sel_dram  = 1'b1;
-            8'h02: sel_uart  = 1'b1;
-            8'h03: sel_spi   = 1'b1;
-            8'h04: sel_gpio  = 1'b1;
-            8'h05: sel_timer = 1'b1;
-            default: ; // no slave selected → bus error
-        endcase
+        if (m_wb_adr[31:24] == 8'h00) begin
+            case (region)
+                8'h00: sel_irom  = 1'b1;
+                8'h01: sel_dram  = 1'b1;
+                8'h02: sel_uart  = 1'b1;
+                8'h03: sel_spi   = 1'b1;
+                8'h04: sel_gpio  = 1'b1;
+                8'h05: sel_timer = 1'b1;
+                default: ; // no slave selected → bus error
+            endcase
+        end
     end
 
     assign sel_none = ~(sel_irom | sel_dram | sel_uart | sel_spi | sel_gpio | sel_timer);
