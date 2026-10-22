@@ -9,7 +9,7 @@
 // =============================================================================
 /* verilator lint_off UNUSEDSIGNAL */
 module irom #(
-    parameter MEM_FILE  = "",
+    parameter MEM_FILE  = "firmware.hex",
     parameter MEM_DEPTH = 1024   // 4 KB / 4 bytes per word
 ) (
     input  logic        clk,
@@ -23,9 +23,9 @@ module irom #(
     output logic        wb_ack,
 
     // Wishbone slave Port B (Data fetch from DMEM for .rodata / constants)
-    input  logic [31:0] b_wb_adr = 32'd0,
-    input  logic        b_wb_stb = 1'b0,
-    input  logic        b_wb_cyc = 1'b0,
+    input  logic [31:0] b_wb_adr,
+    input  logic        b_wb_stb,
+    input  logic        b_wb_cyc,
     output logic [31:0] b_wb_dat_i,
     output logic        b_wb_ack
 );

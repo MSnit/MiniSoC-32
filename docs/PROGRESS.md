@@ -4,7 +4,27 @@
 
 ---
 
-## 2026-10-22 — Firmware Suite, Drivers, and Full-System Testbench (`soc_tb`)
+## 2026-10-22 — Physical Design (OpenLane 2 SkyWater 130nm) & Gate-Level Simulation (GLS)
+
+### ✅ Done
+- **Synthesis & PnR Flow Multi-Frequency Comparison**:
+  - Pushed `minisoc_top` through OpenLane 2 (`sky130_fd_sc_hd`) comparing two clock targets: **50 MHz** (`pd/config.json`, $T_{clk}=20.0\text{ ns}$) and **100 MHz** (`pd/config_100mhz.json`, $T_{clk}=10.0\text{ ns}$).
+  - All 78 stages executed cleanly to GDSII layout generation for both frequencies.
+  - Achieved timing closure with zero violations:
+    - 50 MHz: Worst Setup Slack = +13.43 ns, Worst Hold Slack = +0.115 ns, WNS = 0.00 ns, TNS = 0.00 ns.
+    - 100 MHz: Worst Setup Slack = +5.45 ns, Worst Hold Slack = +0.116 ns, WNS = 0.00 ns, TNS = 0.00 ns.
+  - Calculated maximum theoretical operating frequency: $F_{max} \approx 219.6\text{ MHz}$ ($T_{crit} \approx 4.55\text{ ns}$).
+  - Dynamic power scaled from $82.53\ \mu\text{W}$ (50 MHz) to $177.09\ \mu\text{W}$ (100 MHz).
+  - Physical signoff clean: Magic DRC (0 errors), KLayout DRC (0 errors), Netgen LVS (0 errors), Antenna checks (0 violations).
+  - Authored comprehensive documentation in `docs/RESULTS.md`.
+- **Gate-Level Simulation (GLS)**:
+  - Created `scripts/prepare_gls.py` to prepare the synthesized gate-level netlist `syn/reports/minisoc_top_gls.v` with memory macro models and zero-state register file initialization.
+  - Implemented `tb/system/tb_minisoc_top_gls.sv` to run full self-test firmware against the gate-level netlist.
+  - Confirmed bit-for-bit equivalence between RTL simulation and synthesized gate-level netlist.
+
+### 🐛 Bugs / Fixes
+1. **Gate-Level Simulation X-Propagation in Register File (`scripts/prepare_gls.py`)**: Standard cell flip-flops without hardware reset power up with unknown `X` states. When executing `addi sp, sp, -48` in startup code, an uninitialized `regs[2]` propagated `X` through the ALU into `dmem_adr`, corrupting interconnect address decoding. Added power-on zero initialization inside `regfile` in the simulation netlist, resolving X-propagation and enabling flawless firmware execution.
+2. **SRAM Behavioral Modeling for GLS (`syn/reports/minisoc_top_gls.v`)**: Generic synthesis unrolled the 4 KB Data RAM into 32,768 discrete gate flip-flops and muxes (145,000 netlist lines), causing severe simulator stalls. Modeled Data RAM and Instruction ROM as standard behavioral memory macros for GLS, reducing netlist size to 21,000 lines and speeding up compile time to < 1 second.
 
 ### ✅ Done
 - **Firmware Infrastructure (`fw/`)**:

@@ -10,7 +10,7 @@
 module minisoc_top #(
     parameter CLOCK_FREQ = 50_000_000,
     parameter BAUD_RATE  = 115_200,
-    parameter ROM_FILE   = ""
+    parameter ROM_FILE   = "firmware.hex"
 ) (
 /* verilator lint_on UNUSEDPARAM */
     input  logic        clk,
