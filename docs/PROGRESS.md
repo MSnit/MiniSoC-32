@@ -43,7 +43,8 @@
     - Generated Views: `pd/runs/RUN_2026-10-22_18-28-06/final/gds/minisoc_top.gds`, DEF, LEF, SPICE, SDC, SDF, SPEF.
 
 ### 🐛 Bugs / Fixes
-1. **Timescale Inconsistency (`TIMESCALEMOD`)**: Some peripheral modules contained timescale directives while others did not. Removed timescales from synthesizable RTL modules (keeping them in testbenches) and unified simulation timescale.
+1. **Interconnect Upper Address Bits Decoding (`wb_interconnect.sv`)**: Found during rigorous unmapped address testing that `region = m_wb_adr[23:16]` did not check whether upper address bits `m_wb_adr[31:24] == 8'h00`. Addresses such as `0x1000_0000` were erroneously aliasing to `IROM` instead of asserting `wb_err`. Added strict check for `m_wb_adr[31:24] == 8'h00` before decoding regions, and added continuous back-to-back bus transfer assertions in `tb_wb_interconnect.sv`.
+2. **Timescale Inconsistency (`TIMESCALEMOD`)**: Some peripheral modules contained timescale directives while others did not. Removed timescales from synthesizable RTL modules (keeping them in testbenches) and unified simulation timescale.
 2. **CSR MIP Bit 7 Latch/Unused Signal**: `csr_regfile` was latching `mip[7] <= timer_irq` but reading direct timer wire. Simplified `mip` to a combinational assignment `{24'd0, timer_irq, 7'd0}`, saving 32 flip-flops and cleaning lint.
 3. **Synthesis File Missing (`syn/synth.ys` & `pd/config.json`)**: Template configuration referenced legacy `if_stage.sv` / `id_stage.sv` files instead of `alu.sv`, `control.sv`, `imm_gen.sv`. Updated file lists to point to the correct modular design.
 4. **IROM Hex Missing at Synth**: `irom.sv` attempted to `$readmemh` non-existent file when synthesizing without firmware. Changed default parameter to empty string `""` so synthesis gracefully initializes empty array, while testbenches pass hex paths explicitly.
