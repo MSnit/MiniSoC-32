@@ -1,0 +1,22 @@
+# Build artifacts
+*.vcd
+*.fst
+*.lxt
+*.o
+*.elf
+*.hex
+*.bin
+*.map
+fw/build/
+syn/reports/
+pd/runs/
+
+# Python
+__pycache__/
+*.pyc
+sim_build/
+
+# Editor
+.vscode/
+*.swp
+*~
