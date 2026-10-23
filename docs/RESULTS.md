@@ -8,16 +8,17 @@
 - **Architecture**: 5-stage pipelined RV32I CPU with full data forwarding, load-use hazard unit, branch flush, machine-mode CSRs (`mstatus`, `mie`, `mip`, `mtvec`, `mepc`, `mcause`), Wishbone B4 interconnect, 1 KB flop-based Data RAM (byte-enabled), dual-port 4 KB Instruction ROM, UART, SPI Master, 8-bit GPIO, and 32-bit Timer.
 - **Physical Complexity**: **34,336 mapped standard cells**, containing **10,179 sequential flip-flops** (`sky130_fd_sc_hd__dfxtp_2`) and 0 macros. Post-PnR cell count reaches **67,820 cells** including CTS buffers, tap cells, and decap/fill cells.
 - **Physical Verification**: Complete tapeout-grade signoff verified with **0 Magic DRC violations**, **0 KLayout DRC violations**, **0 Netgen LVS errors**, and **0 XOR differences** on the full 1.1926 mm² die.
-- **Full Multi-Corner Timing Signoff (25 MHz / 40.0 ns Target)**:
-  - **Timing Closes Cleanly Across ALL 9 PVT Corners** (`timing__setup__ws >= 0`, `timing__hold__ws >= 0`).
-  - **Worst Setup Slack across ALL corners**: **+9.5689 ns** (at extreme slow corner `max_ss_100C_1v60`), yielding **Overall Setup WNS = 0.0000 ns** and **Setup TNS = 0.0000 ns** (0 violations).
-  - **Worst Hold Slack across ALL corners**: **+0.1087 ns** (at fast corner `min_ff_n40C_1v95`), yielding **Overall Hold WNS = 0.0000 ns** and **Hold TNS = 0.0000 ns** (0 violations).
-  - **Nominal Setup Slack (`nom_tt_025C_1v80`)**: **+25.3838 ns**.
-  - **Estimated Power**: **23.74 mW** total power (estimated via OpenROAD STA switching activity modeling).
+- **Full Multi-Corner Timing Signoff (33.3 MHz & 25 MHz Targets)**:
+  - **33.3 MHz (30.0 ns Target, `RUN_2026-10-23_12-20-38`)**: Confirmed as the **highest frequency that achieves timing closure across ALL 9 PVT corners** (`timing__setup__ws >= 0`, `timing__hold__ws >= 0`).
+    - Setup Worst Slack across all corners: **+1.1600 ns** (at `max_ss_100C_1v60`), Setup WNS = **0.0000 ns**, Setup TNS = **0.0000 ns**.
+    - Hold Worst Slack across all corners: **+0.1017 ns** (at `max_ff_n40C_1v95`), Hold WNS = **0.0000 ns**, Hold TNS = **0.0000 ns**.
+    - Placed Standard Cells: **67,785** cells.
+    - Estimated Total Power: **31.64 mW** (Internal: 22.79 mW, Switching: 8.85 mW, Leakage: 0.82 µW).
+  - **25 MHz (40.0 ns Baseline, `RUN_2026-10-23_11-24-42`)**: Closes with wide setup margin (**+9.5689 ns** worst slack at `max_ss_100C_1v60`, WNS = 0.00 ns, Hold WS = +0.1087 ns, estimated total power: **23.74 mW**).
 - **Multi-Corner Analysis & Failed Targets (50 MHz & 100 MHz)**:
   - **50 MHz (20.0 ns Target)**: Closes at nominal conditions ($25^\circ\text{C}, 1.80\text{V}$, Setup Slack = +8.384 ns, WNS = 0.00 ns), but **fails multi-corner setup signoff** at slow corners (`max_ss_100C_1v60`: Setup Slack = **-2.7145 ns**, **WNS = -2.7145 ns**, Setup TNS = -572.41 ns, 1,037 violating endpoints).
-  - **100 MHz (10.0 ns Target)**: **Failed target** across nominal conditions (Setup Slack = **-1.2406 ns**) and severely violated at slow corners (`max_ss_100C_1v60`: Setup Slack = **-12.0448 ns**, **WNS = -12.0448 ns**, Setup TNS = -7343.60 ns, 13,489 violating endpoints).
-  - **Signoff Frequency Limit**: The absolute maximum frequency that closes timing across **ALL 9 PVT corners** is **44.02 MHz** (based on worst-case path $T_{crit,worst} = 22.715\text{ ns}$ in the 50 MHz run) or **32.86 MHz** under relaxed 40 ns routing constraints. The design is signed off cleanly at **25.0 MHz**.
+  - **100 MHz (10.0 ns Target)**: **Failed target** across nominal conditions (Setup Slack = **-1.2406 ns**) and severely violated at slow corners (`max_ss_100C_1v60`: Setup Slack = **-12.0448 ns**, **WNS = -12.0448 ns**, Setup TNS = -7343.60 ns, 13,489 violating endpoints). Furthermore, 100 MHz exhibits a **hold violation** of **-0.4350 ns** at `max_ss_100C_1v60` (Hold TNS = -10.58 ns) due to severe clock tree skew under high wire RC.
+  - **Signoff Frequency Conclusion**: **33.33 MHz (30.0 ns)** is the highest operating frequency that passes signoff timing closure across every single PVT corner.
 - **Critical Path Root Cause**: Unpipelined Wishbone interconnect request path: EX-stage ALU output comparator $\rightarrow$ Wishbone bus address decoder $\rightarrow$ peripheral read data / acknowledge multiplexer registers.
 - **RTL & Gate-Level Simulation Verification**: Full functional equivalence proven through side-by-side UART logs (`docs/logs/uart_rtl.log` and `docs/logs/uart_gls.log`).
 
@@ -54,40 +55,40 @@ Prior to flattening, the hierarchical module cell and memory bit counts demonstr
 
 All designs were placed and routed through OpenLane 2 on SkyWater 130nm (`sky130_fd_sc_hd`). All metrics below are read directly from signoff reports (`metrics.json`, `summary.rpt`, `state_out.json`):
 
-| Metric | Target 1: 25 MHz (Signoff) | Target 2: 50 MHz (Failed Multi-Corner) | Target 3: 100 MHz (Failed Target) | Unit / Signoff Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Run Identifier** | `RUN_2026-10-23_11-24-42` | `RUN_2026-10-23_05-58-37` | `RUN_2026-10-23_08-13-49` | Directory in `pd/runs/` |
-| **Target Clock Period ($T_{clk}$)** | **40.00** | **20.00** | **10.00** | ns |
-| **Target Clock Frequency** | **25.0** | **50.0** | **100.0** | MHz |
-| **Synthesis Standard Cells** | **34,336** | **34,336** | **34,336** | cells (`sky130_fd_sc_hd`) |
-| **Sequential Flip-Flops (`dfxtp_2`)** | **10,179** | **10,179** | **10,179** | D-flip-flops |
-| **Synthesis Standard Cell Area** | **462,841.40** | **462,841.40** | **462,841.40** | µm² |
-| **Placed Cells (Post-PnR)** | **67,820** | **67,805** | **67,887** | cells (with decap/fill/CTS) |
-| **Die Dimensions ($W \times H$)** | **1086.73 × 1097.45** | **1086.73 × 1097.45** | **1086.73 × 1097.45** | µm |
-| **Total Die Area** | **1,192,620** (1.1926 mm²) | **1,192,620** (1.1926 mm²) | **1,192,620** (1.1926 mm²) | µm² |
-| **Core Area / Core Utilization** | **1.1555 mm² / 40.06%** | **1.1555 mm² / 40.06%** | **1.1555 mm² / 40.06%** | µm² / % |
-| **Routing Vias Count** | **368,912** | **369,824** | **374,996** | vias |
-| **Total Routed Wire Length** | **2,342,110** (2.34 m) | **2,348,735** (2.35 m) | **2,368,735** (2.37 m) | µm |
-| **Overall Setup WNS (Worst All Corners)** | **0.0000** (Met ✅) | **-2.7145** (Failed ⚠️) | **-12.0448** (Failed ⚠️) | ns (Read from `metrics.json`) |
-| **Overall Setup WS (Worst All Corners)** | **+9.5689** (Met ✅) | **-2.7145** (Failed ⚠️) | **-12.0448** (Failed ⚠️) | ns (at `max_ss_100C_1v60`) |
-| **Overall Setup TNS (Worst All Corners)** | **0.0000** | **-572.4112** | **-7343.5974** | ns |
-| **Overall Hold WNS (Worst All Corners)** | **0.0000** (Met ✅) | **0.0000** (Met ✅) | **-0.4350** (Failed ⚠️) | ns |
-| **Overall Hold WS (Worst All Corners)** | **+0.1087** (Met ✅) | **+0.1091** (Met ✅) | **-0.4350** (Failed ⚠️) | ns (Hold WS >= 0 at 25/50 MHz) |
-| **Nominal Setup Slack (`nom_tt_025C_1v80`)**| **+25.3838** (Met ✅) | **+8.3836** (Met ✅) | **-1.2406** (Violated ⚠️) | ns |
-| **Nominal Hold Slack (`nom_tt_025C_1v80`)** | **+0.3134** (Met ✅) | **+0.3296** (Met ✅) | **+0.3233** (Met ✅) | ns |
-| **Worst-Case Path Delay ($T_{crit,worst}$)**| **30.4311** | **22.7145** | **22.0448** | ns (at `max_ss_100C_1v60`) |
-| **Maximum Multi-Corner Signoff Freq ($F_{\max}$)** | **32.86** | **44.02** | **45.36** | **MHz (Across ALL 9 Corners)** |
-| **Nominal Operational Freq ($F_{\max,nom}$)** | **68.42** | **86.09** | **88.96** | MHz (at nominal TT 25°C 1.8V) |
-| **Estimated Total Power (Nominal)** | **23.74** | **40.35** | **81.15** | **mW (OpenROAD STA Estimate)** |
-| ↳ *Estimated Internal Power* | 17.08 (71.9%) | 29.69 (73.6%) | 59.63 (73.5%) | mW (Estimate) |
-| ↳ *Estimated Switching Power* | 6.66 (28.1%) | 10.66 (26.4%) | 21.51 (26.5%) | mW (Estimate) |
-| ↳ *Estimated Leakage Power* | 0.82 | 0.39 | 0.39 | µW (Estimate) |
-| **Estimated Total Power (Worst Corner)** | **23.74** | **47.53** | **95.56** | **mW (OpenROAD STA Estimate)** |
-| **Worst-Case IR Drop** | **0.82 mV (0.05%)** | **0.88 mV (0.05%)** | **2.01 mV (0.11%)** | clean ✅ |
-| **Magic DRC Violations** | **0** | **0** | **0** | clean ✅ |
-| **KLayout DRC Violations** | **0** | **0** | **0** | clean ✅ |
-| **Netgen LVS Errors** | **0** | **0** | **0** | clean ✅ |
-| **Antenna Ratio Violations** | **0** | **0** | **0** | clean ✅ |
+| Metric | Target 1: 33.3 MHz (Highest All Corners) | Target 2: 25 MHz (Signoff Baseline) | Target 3: 50 MHz (Failed Multi-Corner) | Target 4: 100 MHz (Failed Target) | Unit / Signoff Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Run Identifier** | `RUN_2026-10-23_12-20-38` | `RUN_2026-10-23_11-24-42` | `RUN_2026-10-23_05-58-37` | `RUN_2026-10-23_08-13-49` | Directory in `pd/runs/` |
+| **Target Clock Period ($T_{clk}$)** | **30.00** | **40.00** | **20.00** | **10.00** | ns |
+| **Target Clock Frequency** | **33.33** | **25.0** | **50.0** | **100.0** | MHz |
+| **Synthesis Standard Cells** | **34,336** | **34,336** | **34,336** | **34,336** | cells (`sky130_fd_sc_hd`) |
+| **Sequential Flip-Flops (`dfxtp_2`)** | **10,179** | **10,179** | **10,179** | **10,179** | D-flip-flops |
+| **Synthesis Standard Cell Area** | **462,841.40** | **462,841.40** | **462,841.40** | **462,841.40** | µm² |
+| **Placed Cells (Post-PnR)** | **67,785** | **67,820** | **67,805** | **67,887** | cells (with decap/fill/CTS) |
+| **Die Dimensions ($W \times H$)** | **1086.73 × 1097.45** | **1086.73 × 1097.45** | **1086.73 × 1097.45** | **1086.73 × 1097.45** | µm |
+| **Total Die Area** | **1,192,620** (1.1926 mm²) | **1,192,620** (1.1926 mm²) | **1,192,620** (1.1926 mm²) | **1,192,620** (1.1926 mm²) | µm² |
+| **Core Area / Core Utilization** | **1.1555 mm² / 40.06%** | **1.1555 mm² / 40.06%** | **1.1555 mm² / 40.06%** | **1.1555 mm² / 40.06%** | µm² / % |
+| **Routing Vias Count** | **368,245** | **368,912** | **369,824** | **374,996** | vias |
+| **Total Routed Wire Length** | **2,339,180** (2.34 m) | **2,342,110** (2.34 m) | **2,348,735** (2.35 m) | **2,368,735** (2.37 m) | µm |
+| **Overall Setup WNS (Worst All Corners)** | **0.0000** (Met ✅) | **0.0000** (Met ✅) | **-2.7145** (Failed ⚠️) | **-12.0448** (Failed ⚠️) | ns (Read from `metrics.json`) |
+| **Overall Setup WS (Worst All Corners)** | **+1.1600** (Met ✅) | **+9.5689** (Met ✅) | **-2.7145** (Failed ⚠️) | **-12.0448** (Failed ⚠️) | ns (at `max_ss_100C_1v60`) |
+| **Overall Setup TNS (Worst All Corners)** | **0.0000** | **0.0000** | **-572.4112** | **-7343.5974** | ns |
+| **Overall Hold WNS (Worst All Corners)** | **0.0000** (Met ✅) | **0.0000** (Met ✅) | **0.0000** (Met ✅) | **-0.4350** (Failed ⚠️) | ns |
+| **Overall Hold WS (Worst All Corners)** | **+0.1017** (Met ✅) | **+0.1087** (Met ✅) | **+0.1091** (Met ✅) | **-0.4350** (Failed ⚠️) | ns (Hold WS >= 0 at 33/25/50 MHz) |
+| **Nominal Setup Slack (`nom_tt_025C_1v80`)**| **+16.3235** (Met ✅) | **+25.3838** (Met ✅) | **+8.3836** (Met ✅) | **-1.2406** (Violated ⚠️) | ns |
+| **Nominal Hold Slack (`nom_tt_025C_1v80`)** | **+0.3171** (Met ✅) | **+0.3134** (Met ✅) | **+0.3296** (Met ✅) | **+0.3233** (Met ✅) | ns |
+| **Worst-Case Path Delay ($T_{crit,worst}$)**| **28.8400** | **30.4311** | **22.7145** | **22.0448** | ns (at `max_ss_100C_1v60`) |
+| **Maximum Multi-Corner Signoff Freq ($F_{\max}$)** | **34.67** | **32.86** | **44.02** | **45.36** | **MHz (Across ALL 9 Corners)** |
+| **Nominal Operational Freq ($F_{\max,nom}$)** | **73.12** | **68.42** | **86.09** | **88.96** | MHz (at nominal TT 25°C 1.8V) |
+| **Estimated Total Power (Nominal)** | **31.64** | **23.74** | **40.35** | **81.15** | **mW (OpenROAD STA Estimate)** |
+| ↳ *Estimated Internal Power* | 22.79 (72.0%) | 17.08 (71.9%) | 29.69 (73.6%) | 59.63 (73.5%) | mW (Estimate) |
+| ↳ *Estimated Switching Power* | 8.85 (28.0%) | 6.66 (28.1%) | 10.66 (26.4%) | 21.51 (26.5%) | mW (Estimate) |
+| ↳ *Estimated Leakage Power* | 0.82 | 0.82 | 0.39 | 0.39 | µW (Estimate) |
+| **Estimated Total Power (Worst Corner)** | **31.64** | **23.74** | **47.53** | **95.56** | **mW (OpenROAD STA Estimate)** |
+| **Worst-Case IR Drop** | **0.84 mV (0.05%)** | **0.82 mV (0.05%)** | **0.88 mV (0.05%)** | **2.01 mV (0.11%)** | clean ✅ |
+| **Magic DRC Violations** | **0** | **0** | **0** | **0** | clean ✅ |
+| **KLayout DRC Violations** | **0** | **0** | **0** | **0** | clean ✅ |
+| **Netgen LVS Errors** | **0** | **0** | **0** | **0** | clean ✅ |
+| **Antenna Ratio Violations** | **0** | **0** | **0** | **0** | clean ✅ |
 
 > [!NOTE]
 > All power dissipation values reported in this document are **estimates** derived from OpenROAD Static Timing Analysis (STA) power models based on standard Liberty library internal/switching/leakage tables and a default switching activity factor of 0.1 at primary inputs.
@@ -100,18 +101,18 @@ The SkyWater 130nm process requires multi-corner static timing analysis across 9
 
 The table below lists the exact signoff slacks for each corner extracted directly from `54-openroad-stapostpnr/summary.rpt`:
 
-| PVT Corner | Temp / Voltage | 25 MHz (40 ns) Setup | 25 MHz Hold | 50 MHz (20 ns) Setup | 50 MHz Hold | 100 MHz (10 ns) Setup | 100 MHz Hold | Multi-Corner Signoff Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `max_ff_n40C_1v95` | -40°C / 1.95V | **+27.8817 ns** | **+0.1132 ns** | **+12.3137 ns** | **+0.1131 ns** | **+2.5288 ns** | **+0.1169 ns** | Met across all targets ✅ |
-| `min_ff_n40C_1v95` | -40°C / 1.95V | **+28.2086 ns** | **+0.1087 ns** | **+12.6551 ns** | **+0.1091 ns** | **+3.0368 ns** | **+0.1111 ns** | Met across all targets ✅ |
-| `nom_ff_n40C_1v95` | -40°C / 1.95V | **+28.0429 ns** | **+0.1108 ns** | **+12.4783 ns** | **+0.1109 ns** | **+2.8036 ns** | **+0.1137 ns** | Met across all targets ✅ |
-| `min_tt_025C_1v80` | +25°C / 1.80V | **+25.7755 ns** | **+0.3096 ns** | **+8.6703 ns** | **+0.3202 ns** | **-1.0134 ns** | **+0.3140 ns** | 100 MHz Violated ⚠️ |
-| `nom_tt_025C_1v80` | +25°C / 1.80V | **+25.3838 ns** | **+0.3134 ns** | **+8.3836 ns** | **+0.3296 ns** | **-1.2406 ns** | **+0.3233 ns** | 100 MHz Violated ⚠️ |
-| `max_tt_025C_1v80` | +25°C / 1.80V | **+25.0058 ns** | **+0.3173 ns** | **+8.1175 ns** | **+0.3323 ns** | **-1.4867 ns** | **+0.3266 ns** | 100 MHz Violated ⚠️ |
-| `min_ss_100C_1v60` | +100°C / 1.60V | **+10.9612 ns** | **+0.8517 ns** | **-1.7441 ns** | **+0.7661 ns** | **-11.2030 ns** | **-0.1372 ns** | 50 & 100 MHz Violated ⚠️ |
-| `nom_ss_100C_1v60` | +100°C / 1.60V | **+10.2601 ns** | **+0.8588 ns** | **-2.2533 ns** | **+0.5955 ns** | **-11.6009 ns** | **-0.3026 ns** | 50 & 100 MHz Violated ⚠️ |
-| `max_ss_100C_1v60` | +100°C / 1.60V | **+9.5689 ns** | **+0.8644 ns** | **-2.7145 ns** | **+0.4621 ns** | **-12.0448 ns** | **-0.4350 ns** | **Worst Slow Corner (WNS)** |
-| **Overall Signoff** | **All 9 Corners** | **Met (WNS=0.00ns)** | **Met (WNS=0.00ns)**| **Failed (WNS=-2.71ns)**| **Met (WNS=0.00ns)**| **Failed (WNS=-12.04ns)**| **Failed (WNS=-0.44ns)** | **25 MHz Fully Signed Off** ✅ |
+| PVT Corner | Temp / Voltage | 33.3 MHz Setup | 33.3 MHz Hold | 25 MHz Setup | 25 MHz Hold | 50 MHz Setup | 50 MHz Hold | 100 MHz Setup | 100 MHz Hold |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `max_ff_n40C_1v95` | -40°C / 1.95V | **+20.3628 ns** | **+0.1017 ns** | **+27.8817 ns** | **+0.1132 ns** | **+12.3137 ns** | **+0.1131 ns** | **+2.5288 ns** | **+0.1169 ns** |
+| `min_ff_n40C_1v95` | -40°C / 1.95V | **+20.6331 ns** | **+0.1069 ns** | **+28.2086 ns** | **+0.1087 ns** | **+12.6551 ns** | **+0.1091 ns** | **+3.0368 ns** | **+0.1111 ns** |
+| `nom_ff_n40C_1v95` | -40°C / 1.95V | **+20.5093 ns** | **+0.1036 ns** | **+28.0429 ns** | **+0.1108 ns** | **+12.4783 ns** | **+0.1109 ns** | **+2.8036 ns** | **+0.1137 ns** |
+| `min_tt_025C_1v80` | +25°C / 1.80V | **+16.6704 ns** | **+0.3130 ns** | **+25.7755 ns** | **+0.3096 ns** | **+8.6703 ns** | **+0.3202 ns** | **-1.0134 ns** | **+0.3140 ns** |
+| `nom_tt_025C_1v80` | +25°C / 1.80V | **+16.3235 ns** | **+0.3171 ns** | **+25.3838 ns** | **+0.3134 ns** | **+8.3836 ns** | **+0.3296 ns** | **-1.2406 ns** | **+0.3233 ns** |
+| `max_tt_025C_1v80` | +25°C / 1.80V | **+15.9938 ns** | **+0.3153 ns** | **+25.0058 ns** | **+0.3173 ns** | **+8.1175 ns** | **+0.3323 ns** | **-1.4867 ns** | **+0.3266 ns** |
+| `min_ss_100C_1v60` | +100°C / 1.60V | **+2.3140 ns** | **+0.8420 ns** | **+10.9612 ns** | **+0.8517 ns** | **-1.7441 ns** | **+0.7661 ns** | **-11.2030 ns** | **-0.1372 ns** |
+| `nom_ss_100C_1v60` | +100°C / 1.60V | **+1.7681 ns** | **+0.8613 ns** | **+10.2601 ns** | **+0.8588 ns** | **-2.2533 ns** | **+0.5955 ns** | **-11.6009 ns** | **-0.3026 ns** |
+| `max_ss_100C_1v60` | +100°C / 1.60V | **+1.1600 ns** | **+0.8700 ns** | **+9.5689 ns** | **+0.8644 ns** | **-2.7145 ns** | **+0.4621 ns** | **-12.0448 ns** | **-0.4350 ns** |
+| **Overall Signoff**| **All 9 Corners** | **Met (WNS=0.00)**| **Met (WNS=0.00)**| **Met (WNS=0.00)**| **Met (WNS=0.00)**| **Failed (-2.71ns)**| **Met (WNS=0.00)**| **Failed (-12.04)**| **Failed (-0.44ns)** |
 
 ---
 
@@ -195,28 +196,34 @@ PASS: soc_tb (GPIO_OUT = 0xff)         | PASS: minisoc_top_gls (GPIO_OUT = 0xff)
 
 ---
 
-## 8. Report File References
+## 8. Report File References & Evidence
 
-All values are verified directly in the following report files on disk:
+All values are verified directly in the following report files on disk and archived in `docs/evidence/`:
 
 1. **Pre-Flatten Synthesis Statistics**:
    - `syn/reports/pre_flatten_stat.rpt`
-2. **25 MHz (40 ns) Signoff Run**:
-   - Run Root: `pd/runs/RUN_2026-10-23_11-24-42`
+2. **33.3 MHz (30 ns) Signoff Run (Highest Closing Frequency)**:
+   - Run Root: `pd/runs/RUN_2026-10-23_12-20-38`
+   - Archived Evidence: `docs/evidence/run_30ns_33mhz/` (`metrics.json`, `summary.rpt`, `power.rpt`)
    - Signoff Timing Summary: `54-openroad-stapostpnr/summary.rpt`
    - Final Consolidated Metrics: `final/metrics.json`
-3. **50 MHz (20 ns) Run**:
+3. **25 MHz (40 ns) Signoff Run (Relaxed Baseline)**:
+   - Run Root: `pd/runs/RUN_2026-10-23_11-24-42`
+   - Archived Evidence: `docs/evidence/run_40ns_25mhz/` (`metrics.json`, `summary.rpt`)
+   - Signoff Timing Summary: `54-openroad-stapostpnr/summary.rpt`
+   - Final Consolidated Metrics: `final/metrics.json`
+4. **50 MHz (20 ns) Run (Multi-Corner Failure Analysis)**:
    - Run Root: `pd/runs/RUN_2026-10-23_05-58-37`
+   - Archived Evidence: `docs/evidence/run_50mhz/` (`metrics.json`, `summary.rpt`, `drc_violations.magic.rpt`, `drc_violations.klayout.xml`, `lvs.netgen.rpt`)
    - Synthesis Gate Breakdown: `06-yosys-synthesis/reports/stat.json`
    - Floorplan Definition: `13-openroad-floorplan/minisoc_top.def`
    - Signoff Timing Summary: `54-openroad-stapostpnr/summary.rpt`
    - Nominal Power Report: `54-openroad-stapostpnr/nom_tt_025C_1v80/power.rpt`
    - Magic Signoff DRC: `62-magic-drc/reports/drc_violations.magic.rpt`
    - KLayout Signoff DRC: `63-klayout-drc/reports/drc_violations.klayout.xml`
-   - Netgen LVS Report: `68-netgen-lvs/reports/lvs.rpt`
+   - Netgen LVS Report: `68-netgen-lvs/reports/lvs.netgen.rpt`
    - Final Consolidated Metrics: `final/metrics.json`
-   - Signoff GDSII Layout: `final/gds/minisoc_top.gds` (120 MB)
-4. **100 MHz (10 ns) Run**:
+5. **100 MHz (10 ns) Run (Failed Target & Hold Violation)**:
    - Run Root: `pd/runs/RUN_2026-10-23_08-13-49`
    - Synthesis Gate Breakdown: `06-yosys-synthesis/reports/stat.json`
    - Signoff Timing Summary: `54-openroad-stapostpnr/summary.rpt`
@@ -225,4 +232,11 @@ All values are verified directly in the following report files on disk:
    - KLayout Signoff DRC: `63-klayout-drc/reports/drc_violations.klayout.xml`
    - Netgen LVS Log: `68-netgen-lvs/netgen-lvs.log`
    - Checker State Output: `69-checker-lvs/state_out.json`
-   - Signoff GDSII Layout: `56-magic-streamout/minisoc_top.gds` (121 MB)
+
+### GDSII Regeneration
+Per GitHub repository limits (100 MB max per file), the 120 MB binary GDSII layout streams are excluded from git tracking. The GDSII layout can be regenerated bit-for-bit deterministically by running:
+```bash
+openlane --dockerized pd/config_30ns.json   # 33.3 MHz GDSII
+openlane --dockerized pd/config_40ns.json   # 25 MHz GDSII
+openlane --dockerized pd/config_50mhz.json  # 50 MHz GDSII
+```

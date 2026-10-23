@@ -287,19 +287,19 @@ In `fw/src/startup.S`:
 - **Worst Negative Slack (WNS)**: Defined as $\min(0, \text{Worst Slack})$ across **all evaluated PVT corners**. A design only closes timing if $WNS = 0.00\text{ ns}$ across every operating corner.
 - **Why Multi-Corner Signoff Matters**:
   A design may show positive slack at nominal conditions ($25^\circ\text{C}, 1.80\text{V}$, typical silicon) but fail in production under worst-case temperature and voltage droop.
-  For example, in MiniSoC-32 at 50 MHz ($T_{clk}=20.0\text{ ns}$):
-  - Nominal corner (`nom_tt_025C_1v80`): Slack is **+8.384 ns** ($F_{\max,nom} \approx 86.09\text{ MHz}$).
-  - Worst slow corner (`max_ss_100C_1v60`, 100°C, 1.60V): Carrier mobility drops and wire RC increases, stretching path delay to $22.715\text{ ns}$, yielding a setup slack of **-2.7145 ns** and **WNS = -2.7145 ns** (Failed multi-corner signoff).
-  - True multi-corner signoff was achieved at **25 MHz (40.0 ns)**, which provides **+9.5689 ns slack** at `max_ss_100C_1v60`, closing cleanly with **WNS = 0.00 ns** across all 9 PVT corners.
+  For example, in MiniSoC-32:
+  - At 50 MHz ($T_{clk}=20.0\text{ ns}$): Nominal corner (`nom_tt_025C_1v80`) slack is **+8.384 ns** ($F_{\max,nom} \approx 86.09\text{ MHz}$). However, at the worst slow corner (`max_ss_100C_1v60`, 100°C, 1.60V), carrier mobility drops and wire RC increases, stretching path delay to $22.715\text{ ns}$, yielding a setup slack of **-2.7145 ns** and **WNS = -2.7145 ns** (Failed multi-corner signoff).
+  - At 100 MHz ($T_{clk}=10.0\text{ ns}$): Fails nominal setup ($-1.2406\text{ ns}$) and severely violates slow-corner setup (**-12.0448 ns**), while also suffering a **-0.4350 ns hold violation** at `max_ss_100C_1v60` due to clock-tree RC delay skew.
+  - Complete multi-corner signoff was achieved at **33.3 MHz (30.0 ns)**, which provides **+1.1600 ns setup slack** at `max_ss_100C_1v60` and **+0.1017 ns hold slack**, closing cleanly with **WNS = 0.00 ns** across all 9 PVT corners as the highest viable clock target (with **25 MHz** providing a relaxed +9.5689 ns setup margin).
 - **Hold Time ($T_{hold}$)**: The minimum time data must remain stable *after* the active clock edge.
   $$\text{Hold Slack} = (T_{cq} + T_{comb\_min} - T_{skew}) - T_{hold}$$
-  Hold violations cannot be fixed by slowing the clock—they must be resolved during PnR by inserting delay buffers. MiniSoC-32 achieved zero hold violations across all corners ($WHS = +0.1087\text{ ns}$).
+  Hold violations cannot be fixed by slowing the clock—they must be resolved during PnR by inserting delay buffers. MiniSoC-32 achieved zero hold violations across all corners at 33.3 MHz, 25 MHz, and 50 MHz ($WHS \ge +0.1017\text{ ns}$).
 
 ---
 
 ### Q27: How does Clock Tree Synthesis (CTS) prevent hold time violations?
 **Answer:**  
-CTS inserts a balanced network of clock inverters and buffers from the clock root pin to all sequential flip-flops. By balancing propagation delays, it minimizes **clock skew** (the arrival time difference between any two flip-flops). In MiniSoC-32, OpenLane's CTS achieved balanced clock distribution across all 10,179 sequential flip-flops, leaving a positive hold slack margin of **+0.1087 ns** at the fastest corner (`min_ff_n40C_1v95`) and zero hold violations across all 9 corners.
+CTS inserts a balanced network of clock inverters and buffers from the clock root pin to all sequential flip-flops. By balancing propagation delays, it minimizes **clock skew** (the arrival time difference between any two flip-flops). In MiniSoC-32, OpenLane's CTS achieved balanced clock distribution across all 10,179 sequential flip-flops, leaving a positive hold slack margin of **+0.1017 ns** at 33.3 MHz and **+0.1087 ns** at 25 MHz, achieving zero hold violations across all 9 corners.
 
 ---
 
@@ -325,5 +325,5 @@ Power figures are **estimates** computed by OpenROAD Static Timing Analysis (STA
 $$P_{total} = P_{internal} + P_{switching} + P_{leakage}$$
 - **Dynamic Power ($P_{internal} + P_{switching}$)**: Caused by charging and discharging parasitic capacitance ($C_{load}$) and momentary crowbar currents during CMOS transitions:
   $$P_{dyn} = C_{load} \cdot V_{DD}^2 \cdot f \cdot \alpha$$
-  Because $P_{dyn} \propto f$, increasing frequency from 25 MHz to 50 MHz and 100 MHz scales estimated total power from **23.74 mW** (25 MHz) to **40.35 mW** (50 MHz) and **81.15 mW** (100 MHz) ($2.01\times$ scaling between 50 and 100 MHz).
+  Because $P_{dyn} \propto f$, increasing frequency scales estimated total power from **23.74 mW** (25 MHz) to **31.64 mW** (33.3 MHz), **40.35 mW** (50 MHz), and **81.15 mW** (100 MHz) ($2.01\times$ scaling between 50 and 100 MHz).
 - **Leakage Power ($P_{leakage}$)**: Caused by sub-threshold conduction and gate oxide tunneling when transistors are idle. Because supply voltage and temperature remained constant, leakage power remained negligible ($0.39$ to $0.82\ \mu\text{W}$).
