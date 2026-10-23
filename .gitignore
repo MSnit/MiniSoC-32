@@ -5,8 +5,12 @@
 *.o
 *.elf
 *.hex
+!pd/firmware.hex
 *.bin
 *.map
+*.vvp
+*.gds
+*.gds.gz
 fw/build/
 syn/reports/
 pd/runs/

@@ -9,7 +9,7 @@
 // =============================================================================
 /* verilator lint_off UNUSEDSIGNAL */
 module irom #(
-    parameter MEM_FILE  = "firmware.hex",
+    parameter MEM_FILE  = "pd/firmware.hex",
     parameter MEM_DEPTH = 1024   // 4 KB / 4 bytes per word
 ) (
     input  logic        clk,
@@ -34,9 +34,6 @@ module irom #(
 
     // Load hex file at elaboration time
     initial begin
-        integer i;
-        for (i = 0; i < MEM_DEPTH; i = i + 1)
-            mem[i] = 32'd0;
         if (MEM_FILE != "")
             $readmemh(MEM_FILE, mem);
     end

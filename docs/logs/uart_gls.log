@@ -1,0 +1,21 @@
+============================================================
+  Starting MiniSoC-32 Gate-Level Simulation (GLS)
+============================================================
+[GLS] Reset released. Executing synthesized SoC netlist...
+
+=== MiniSoC-32 Sy[GLS Heartbeat] cycle=25000, time=499990000 ns, GPIO_OUT=0x00
+stem Self-Test ===[GLS Heartbeat] cycle=50000, time=999990000 ns, GPIO_OUT=0x00
+
+[TEST] DRAM: OK
+[T[GLS Heartbeat] cycle=75000, time=1499990000 ns, GPIO_OUT=0x00
+EST] GPIO: OK
+[TES[GLS Heartbeat] cycle=100000, time=1999990000 ns, GPIO_OUT=0x5a
+T] Timer IRQ: OK
+[[GLS Heartbeat] cycle=125000, time=2499990000 ns, GPIO_OUT=0x5a
+TEST] SPI Master: OK[GLS Heartbeat] cycle=150000, time=2999990000 ns, GPIO_OUT=0x5a
+ (rx=0x4A)
+============================================================
+  GPIO_OUT = 0xff (PASS flag confirmed)
+PASS: minisoc_top_gls
+============================================================
+/home/manthan/minisoc/tb/system/tb_minisoc_top_gls.sv:101: $finish called at 3276130000 (1ps)

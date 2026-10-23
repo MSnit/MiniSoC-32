@@ -1,0 +1,20 @@
+# Read all RTL files
+read_verilog -sv rtl/cpu/regfile.sv
+read_verilog -sv rtl/cpu/csr_regfile.sv
+read_verilog -sv rtl/cpu/hazard_unit.sv
+read_verilog -sv rtl/cpu/alu.sv
+read_verilog -sv rtl/cpu/imm_gen.sv
+read_verilog -sv rtl/cpu/control.sv
+read_verilog -sv rtl/cpu/rv32i_cpu.sv
+read_verilog -sv rtl/bus/wb_interconnect.sv
+read_verilog -sv rtl/mem/irom.sv
+read_verilog -sv rtl/mem/dram.sv
+read_verilog -sv rtl/periph/uart.sv
+read_verilog -sv rtl/periph/spi_master.sv
+read_verilog -sv rtl/periph/gpio.sv
+read_verilog -sv rtl/periph/timer.sv
+read_verilog -sv rtl/top/minisoc_top.sv
+
+hierarchy -check -top minisoc_top
+proc
+stat

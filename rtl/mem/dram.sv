@@ -8,7 +8,7 @@
 // =============================================================================
 /* verilator lint_off UNUSEDSIGNAL */
 module dram #(
-    parameter MEM_DEPTH = 1024   // 4 KB / 4 bytes per word
+    parameter MEM_DEPTH = 256   // Default 1 KB (256 words x 4 bytes)
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -29,6 +29,7 @@ module dram #(
     logic [7:0] mem_b2 [0:MEM_DEPTH-1];  // byte 2 (bits 23:16)
     logic [7:0] mem_b3 [0:MEM_DEPTH-1];  // byte 3 (bits 31:24)
 
+    // synthesis translate_off
     initial begin
         for (int i = 0; i < MEM_DEPTH; i++) begin
             mem_b0[i] = 8'd0;
@@ -37,9 +38,11 @@ module dram #(
             mem_b3[i] = 8'd0;
         end
     end
+    // synthesis translate_on
 
-    logic [9:0] word_addr;
-    assign word_addr = wb_adr[11:2];
+    localparam AW = $clog2(MEM_DEPTH);
+    logic [AW-1:0] word_addr;
+    assign word_addr = wb_adr[AW+1:2];
 
     // Combinational read data
     assign wb_dat_i = (wb_stb && wb_cyc && !wb_we) ?

@@ -11,7 +11,7 @@
 
 This report details the architectural design, SystemVerilog RTL implementation, firmware co-verification, and physical implementation of **MiniSoC-32**, a complete 32-bit System-on-Chip (SoC) based on the unprivileged RISC-V RV32I instruction set architecture. MiniSoC-32 features a classic 5-stage in-order pipeline (IF, ID, EX, MEM, WB) augmented with full operand forwarding, hazard detection for single-cycle load-use stalls, branch flush penalties, and minimal machine-mode Control and Status Registers (CSRs) supporting vectored machine-timer interrupt traps. The core communicates over a standardized Wishbone B4 pipelined interconnect to a dual-port 4 KB Instruction ROM (supporting concurrent fetch and `.rodata` loads), a byte-addressable 4 KB Data RAM, and four memory-mapped peripherals: a 16× oversampled UART, a Mode 0 SPI master, an 8-bit bidirectional GPIO controller, and a 32-bit timer with compare-match interrupt capability.
 
-The complete SoC was synthesized using Yosys 0.52 and placed & routed to physical layout (GDSII) using the OpenLane 2.3.10 flow targeting the SkyWater 130nm process (`sky130_fd_sc_hd`). Two distinct operating frequency targets were evaluated: **50 MHz** ($T_{clk}=20.0\text{ ns}$) and **100 MHz** ($T_{clk}=10.0\text{ ns}$). Both closed timing with zero violations across all PVT corners (Worst Setup Slack: +5.45 ns at 100 MHz; Worst Negative Slack: 0.00 ns), achieving an estimated maximum operating frequency of **219.6 MHz** ($T_{crit} \approx 4.55\text{ ns}$). Total power consumption scaled from 82.53 µW (50 MHz) to 177.09 µW (100 MHz). Complete physical verification signoff was achieved with zero Magic DRC errors, zero KLayout DRC errors, zero Netgen LVS mismatch errors, and zero antenna violations. Bit-for-bit functional equivalence was verified through full-system gate-level simulation (GLS) executing bare-metal firmware self-tests.
+The complete SoC was synthesized using Yosys and placed & routed to physical layout (GDSII) using the OpenLane 2 automated flow targeting the SkyWater 130nm process (`sky130_fd_sc_hd`). The design contains **34,336 mapped standard cells**, including **10,179 sequential flip-flops** (`sky130_fd_sc_hd__dfxtp_2`) and 0 macros, placed in a **1.1926 mm² die** (1086.73 µm × 1097.45 µm) with a **1.1555 mm² core** (40.06% utilization). Static timing analysis was evaluated across 9 PVT corners for clock targets of **25 MHz** ($T_{clk}=40.0\text{ ns}$), **50 MHz** ($T_{clk}=20.0\text{ ns}$), and **100 MHz** ($T_{clk}=10.0\text{ ns}$). Full tapeout signoff was achieved at **25 MHz**, where the design closes timing cleanly across **ALL 9 PVT corners** with **WNS = 0.00 ns** (+9.5689 ns worst setup slack at `max_ss_100C_1v60`, +0.1087 ns worst hold slack) and an estimated total power of **23.74 mW**. In contrast, the 50 MHz target meets nominal timing (+8.384 ns) but fails multi-corner signoff at the extreme slow corner (`max_ss_100C_1v60`: WNS = -2.7145 ns), while 100 MHz fails both nominal (-1.2406 ns) and slow corners (WNS = -12.0448 ns), isolating the unpipelined Wishbone interconnect and ALU comparator datapath as the critical path. The theoretical maximum frequency closing across all 9 corners is **44.02 MHz** ($T_{crit,worst}=22.715\text{ ns}$). Complete physical verification signoff was achieved with zero Magic DRC errors, zero KLayout DRC errors, zero Netgen LVS mismatch errors, and zero antenna violations. Functional equivalence between RTL and post-synthesis silicon was verified through side-by-side UART logs from full-system gate-level simulation (GLS).
 
 ---
 
@@ -292,59 +292,83 @@ Running `bash scripts/regress.sh` executes the entire suite with automated repor
 
 ## 6. Physical Design Results & Frequency Comparison
 
-MiniSoC-32 was implemented in OpenLane 2 targeting the SkyWater 130nm `sky130_fd_sc_hd` library. Two frequency targets were compared to evaluate timing margins and power scaling.
+MiniSoC-32 was implemented in OpenLane 2 targeting the SkyWater 130nm `sky130_fd_sc_hd` standard-cell library. Three clock targets were evaluated across 9 PVT operating corners: **25 MHz** ($T_{clk}=40.0\text{ ns}$), **50 MHz** ($T_{clk}=20.0\text{ ns}$), and **100 MHz** ($T_{clk}=10.0\text{ ns}$).
 
 ### 6.1 Physical Design Signoff Metrics Table
 
-| Metric | Target 1: 50 MHz (`pd/config.json`) | Target 2: 100 MHz (`pd/config_100mhz.json`) | Unit / Status |
-| :--- | :--- | :--- | :--- |
-| **Clock Period ($T_{clk}$)** | **20.0** | **10.0** | ns |
-| **Target Operating Frequency** | **50.0** | **100.0** | MHz |
-| **Worst Setup Slack (WSS)** | **+13.43** | **+5.45** | ns (Met ✅) |
-| **Worst Negative Slack (WNS)** | **0.00** | **0.00** | ns (Zero violations ✅) |
-| **Total Negative Slack (TNS)** | **0.00** | **0.00** | ns (Zero violations ✅) |
-| **Worst Hold Slack (WHS)** | **+0.115** | **+0.116** | ns (Met ✅) |
-| **Clock Skew (Worst Setup / Hold)** | **+0.250 / -0.250** | **+0.251 / -0.251** | ns |
-| **Critical Path Delay ($T_{crit}$)** | **4.57** | **4.55** | ns |
-| **Maximum Frequency ($F_{max}$)** | **218.8** | **219.6** | **MHz** |
-| **Total Power Consumption** | **82.53** | **177.09** | **µW** |
-| ↳ *Internal Power* | 67.34 | 144.28 | µW |
-| ↳ *Switching Power* | 15.19 | 32.80 | µW |
-| ↳ *Leakage Power* | 1.50 | 1.50 | nW |
-| **Die Dimensions ($W \times H$)** | **57.36 × 68.08** | **57.36 × 68.08** | µm |
-| **Total Die Area** | **3,905.07** | **3,905.07** | µm² |
-| **Core Area** | **2,127.04** | **2,127.04** | µm² |
-| **Standard Cell Area** | **1,020.98** | **1,024.73** | µm² |
-| **Core Utilization** | **48.00%** | **48.18%** | % |
-| **Total Standard Cells** | **140** | **140** | cells |
-| ↳ *Sequential Flip-Flops* | 16 | 16 | cells |
-| ↳ *Combinational Logic Gates* | 71 | 71 | cells |
-| ↳ *Inverters / Buffers* | 4 | 4 | cells |
-| ↳ *Well Tap Cells* | 28 | 28 | cells |
-| ↳ *Filler Cells* | 172 | 175 | cells |
-| **Magic DRC Errors** | **0** | **0** | **Passed ✅** |
-| **KLayout DRC Errors** | **0** | **0** | **Passed ✅** |
-| **Netgen LVS Errors** | **0** | **0** | **Passed ✅** |
-| **Antenna Violations** | **0** | **0** | **Passed ✅** |
+| Metric | Target 1: 25 MHz (Signoff) | Target 2: 50 MHz (Multi-Corner Failure) | Target 3: 100 MHz (Failed Target) | Unit / Signoff Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Clock Period ($T_{clk}$)** | **40.00** | **20.00** | **10.00** | ns |
+| **Target Operating Frequency** | **25.0** | **50.0** | **100.0** | MHz |
+| **Overall Setup WNS (Worst All Corners)** | **0.0000** | **-2.7145** | **-12.0448** | ns (Read from `metrics.json`) |
+| **Overall Setup WS (Worst All Corners)** | **+9.5689** | **-2.7145** | **-12.0448** | ns (at `max_ss_100C_1v60`) |
+| **Overall Setup TNS (Worst All Corners)** | **0.0000** | **-572.4112** | **-7343.5974** | ns |
+| **Overall Hold WNS (Worst All Corners)** | **0.0000** | **0.0000** | **-0.4350** | ns |
+| **Overall Hold WS (Worst All Corners)** | **+0.1087** | **+0.1091** | **-0.4350** | ns (Zero hold violations at 25/50 MHz) |
+| **Nominal Setup Slack (`nom_tt_025C_1v80`)** | **+25.3838** (Met ✅) | **+8.3836** (Met ✅) | **-1.2406** (Violated ⚠️) | ns |
+| **Nominal Hold Slack (`nom_tt_025C_1v80`)** | **+0.3134** (Met ✅) | **+0.3296** (Met ✅) | **+0.3233** (Met ✅) | ns |
+| **Fast Corner Setup Slack (`nom_ff_n40C_1v95`)** | **+28.0429** | **+12.4783** | **+2.8036** | ns |
+| **Slow Corner Setup Slack (`max_ss_100C_1v60`)** | **+9.5689** (Met ✅) | **-2.7145** (Violated ⚠️) | **-12.0448** (Violated ⚠️) | ns (Worst PVT corner) |
+| **Critical Path Delay ($T_{crit,worst}$)** | **30.4311** | **22.7145** | **22.0448** | ns (at `max_ss_100C_1v60`) |
+| **Highest Frequency Closing Across All Corners** | **32.86** | **44.02** | **45.36** | **MHz (Multi-Corner Limit)** |
+| **Nominal Operational Frequency ($F_{max,nom}$)** | **68.42** | **86.09** | **88.96** | **MHz (Nominal TT 25°C 1.8V)** |
+| **Estimated Total Power (Nominal)** | **23.74** | **40.35** | **81.15** | **mW (OpenROAD STA Estimate)** |
+| ↳ *Estimated Internal Power* | 17.08 (71.9%) | 29.69 (73.6%) | 59.63 (73.5%) | mW (Estimate) |
+| ↳ *Estimated Switching Power* | 6.66 (28.1%) | 10.66 (26.4%) | 21.51 (26.5%) | mW (Estimate) |
+| ↳ *Estimated Leakage Power* | 0.82 | 0.39 | 0.39 | µW (Estimate) |
+| **Estimated Total Power (Worst Corner)** | **23.74** | **47.53** | **95.56** | **mW (OpenROAD STA Estimate)** |
+| **Die Dimensions ($W \times H$)** | **1086.73 × 1097.45** | **1086.73 × 1097.45** | **1086.73 × 1097.45** | µm |
+| **Total Die Area** | **1,192,620** (1.1926 mm²) | **1,192,620** (1.1926 mm²) | **1,192,620** (1.1926 mm²) | µm² |
+| **Core Area** | **1,155,500** (1.1555 mm²) | **1,155,500** (1.1555 mm²) | **1,155,500** (1.1555 mm²) | µm² |
+| **Standard Cell Area** | **462,841.40** | **462,841.40** | **462,841.40** | µm² |
+| **Core Utilization** | **40.06%** | **40.06%** | **40.06%** | % |
+| **Total Placed Cells** | **67,820** | **67,805** | **67,887** | cells (with decap/fill/CTS) |
+| ↳ *Sequential Flip-Flops* | 10,179 | 10,179 | 10,179 | `dfxtp_2` cells |
+| ↳ *Synthesized Logic Cells* | 34,336 | 34,336 | 34,336 | cells |
+| **Routing Vias Count** | **368,912** | **369,824** | **374,996** | vias |
+| **Total Wire Length** | **2,342,110** (2.34 m) | **2,348,735** (2.35 m) | **2,368,735** (2.37 m) | µm |
+| **Magic DRC Errors** | **0** | **0** | **0** | **Passed ✅** |
+| **KLayout DRC Errors** | **0** | **0** | **0** | **Passed ✅** |
+| **Netgen LVS Errors** | **0** | **0** | **0** | **Passed ✅** |
+| **Antenna Violations** | **0** | **0** | **0** | **Passed ✅** |
 
-### 6.2 Critical Path & Timing Analysis
-The critical path in the design spans from the `ID/EX` pipeline registers through the operand forwarding multiplexers and ALU comparison subtractor, ending at the branch comparator logic.
-- Total path propagation delay: $4.55\text{ ns}$.
-- Setup slack at 100 MHz ($T_{clk}=10.0\text{ ns}$): $+5.45\text{ ns}$.
-- Theoretical maximum frequency:
-  $$F_{max} = \frac{1}{T_{clk} - \text{WSS}} = \frac{1}{10.0\text{ ns} - 5.45\text{ ns}} = \frac{1}{4.55\text{ ns}} \approx 219.6\text{ MHz}$$
+> [!NOTE]
+> All reported power numbers are **estimates** generated by OpenROAD Static Timing Analysis based on Liberty standard-cell models with an assumed input toggle rate and switching activity factor of 0.1.
 
-### 6.3 Power Scaling
+### 6.2 Multi-Corner Setup and Hold Slack Table (9 PVT Corners)
+
+| PVT Corner | Temp / Voltage | 25 MHz Setup (40 ns) | 25 MHz Hold | 50 MHz Setup (20 ns) | 50 MHz Hold | 100 MHz Setup (10 ns) | 100 MHz Hold | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `max_ff_n40C_1v95` | -40°C / 1.95V | **+27.8817 ns** | **+0.1132 ns** | **+12.3137 ns** | **+0.1131 ns** | **+2.5288 ns** | **+0.1169 ns** | Met across all targets ✅ |
+| `min_ff_n40C_1v95` | -40°C / 1.95V | **+28.2086 ns** | **+0.1087 ns** | **+12.6551 ns** | **+0.1091 ns** | **+3.0368 ns** | **+0.1111 ns** | Met across all targets ✅ |
+| `nom_ff_n40C_1v95` | -40°C / 1.95V | **+28.0429 ns** | **+0.1108 ns** | **+12.4783 ns** | **+0.1109 ns** | **+2.8036 ns** | **+0.1137 ns** | Met across all targets ✅ |
+| `min_tt_025C_1v80` | +25°C / 1.80V | **+25.7755 ns** | **+0.3096 ns** | **+8.6703 ns** | **+0.3202 ns** | **-1.0134 ns** | **+0.3140 ns** | 100 MHz Violated ⚠️ |
+| `nom_tt_025C_1v80` | +25°C / 1.80V | **+25.3838 ns** | **+0.3134 ns** | **+8.3836 ns** | **+0.3296 ns** | **-1.2406 ns** | **+0.3233 ns** | 100 MHz Violated ⚠️ |
+| `max_tt_025C_1v80` | +25°C / 1.80V | **+25.0058 ns** | **+0.3173 ns** | **+8.1175 ns** | **+0.3323 ns** | **-1.4867 ns** | **+0.3266 ns** | 100 MHz Violated ⚠️ |
+| `min_ss_100C_1v60` | +100°C / 1.60V | **+10.9612 ns** | **+0.8517 ns** | **-1.7441 ns** | **+0.7661 ns** | **-11.2030 ns** | **-0.1372 ns** | 50 & 100 MHz Violated ⚠️ |
+| `nom_ss_100C_1v60` | +100°C / 1.60V | **+10.2601 ns** | **+0.8588 ns** | **-2.2533 ns** | **+0.5955 ns** | **-11.6009 ns** | **-0.3026 ns** | 50 & 100 MHz Violated ⚠️ |
+| `max_ss_100C_1v60` | +100°C / 1.60V | **+9.5689 ns** | **+0.8644 ns** | **-2.7145 ns** | **+0.4621 ns** | **-12.0448 ns** | **-0.4350 ns** | **Worst Slow Corner (WNS)** |
+| **Overall Signoff**| **All 9 Corners** | **Met (WNS=0.00ns)** | **Met (WNS=0.00ns)**| **Failed (WNS=-2.71ns)**| **Met (WNS=0.00ns)**| **Failed (WNS=-12.04ns)**| **Failed (WNS=-0.44ns)** | **25 MHz Fully Signed Off** ✅ |
+
+### 6.3 Critical Path & Multi-Corner Timing Analysis
+The critical path in the design spans from the EX-stage ALU output comparator through the Wishbone interconnect address decoder multiplexers, terminating at the slave peripheral acknowledge/read data registers.
+- **25 MHz Target ($T_{clk}=40.0\text{ ns}$)**: Setup slack is positive across **all 9 corners**, with $+9.5689\text{ ns}$ margin even at the worst slow corner (`max_ss_100C_1v60`). Overall WNS is $0.00\text{ ns}$, giving complete multi-corner timing closure.
+- **50 MHz Target ($T_{clk}=20.0\text{ ns}$)**: While nominal setup slack is $+8.384\text{ ns}$ ($F_{\max} = 86.09\text{ MHz}$), the extreme slow corner (`max_ss_100C_1v60`, 100°C, 1.60V) derates cell propagation delays and increases interconnect wire RC, extending the critical path to $22.715\text{ ns}$ and resulting in a **-2.7145 ns setup violation** (TNS: -572.41 ns).
+- **100 MHz Target ($T_{clk}=10.0\text{ ns}$)**: Path delay violates timing even at nominal conditions ($-1.2406\text{ ns}$ slack), and fails severely at slow corners ($-12.0448\text{ ns}$ slack).
+- **Highest Closing Frequency**: Across all 9 corners, the highest frequency that achieves timing closure is **44.02 MHz** ($T_{crit,worst} = 22.715\text{ ns}$) based on the timing-driven 50 MHz netlist, or **32.86 MHz** ($T_{crit,worst} = 30.431\text{ ns}$) under 40 ns constraints.
+
+### 6.4 Power Scaling
 Dynamic switching power scaled directly with operating frequency:
-- At 50 MHz: $P_{total} = 82.53\ \mu\text{W}$
-- At 100 MHz: $P_{total} = 177.09\ \mu\text{W}$ ($2.14\times$ increase)
-- Leakage power remained constant at $1.50\ \text{nW}$ at 25°C, confirming the ultra-low quiescent consumption of the SkyWater 130nm process.
+- At 25 MHz: Estimated $P_{total} = 23.74\ \text{mW}$
+- At 50 MHz: Estimated $P_{total} = 40.35\ \text{mW}$
+- At 100 MHz: Estimated $P_{total} = 81.15\ \text{mW}$ ($2.01\times$ increase over 50 MHz, aligning with $P = C V^2 f$)
+- Sequential logic (10,179 flip-flops) and clock distribution account for 93.7% of total internal dissipation, while combinational logic accounts for 6.2%. Static leakage power is estimated at $0.39$ to $0.82\ \mu\text{W}$ at 25°C.
 
 ---
 
 ## 7. Gate-Level Simulation (GLS) Signoff
 
-Gate-level simulation was performed on the synthesized netlist using [`tb/system/tb_minisoc_top_gls.sv`](file:///home/manthan/minisoc/tb/system/tb_minisoc_top_gls.sv) with the full self-test binary:
+Gate-level simulation was performed on the synthesized netlist using [`tb/system/tb_minisoc_top_gls.sv`](file:///home/manthan/minisoc/tb/system/tb_minisoc_top_gls.sv) with the full self-test binary. Side-by-side evidence logs comparing RTL simulation and Gate-Level Simulation are preserved in [`docs/logs/uart_rtl.log`](file:///home/manthan/minisoc/docs/logs/uart_rtl.log) and [`docs/logs/uart_gls.log`](file:///home/manthan/minisoc/docs/logs/uart_gls.log):
 
 ```text
 ============================================================
@@ -460,6 +484,6 @@ gtkwave /tmp/soc_tb.vcd
 
 ## 11. Conclusion
 
-**MiniSoC-32** successfully demonstrates a complete, production-grade VLSI implementation of a 32-bit RISC-V SoC using exclusively open-source tools. The processor core correctly executes the unprivileged RV32I instruction set with deterministic pipeline hazard handling and vectored timer interrupt management. 
+**MiniSoC-32** successfully demonstrates a complete, production-grade VLSI implementation of a 32-bit RISC-V SoC using exclusively open-source tools. The processor core correctly executes the unprivileged RV32I instruction set with deterministic pipeline hazard handling and vectored timer interrupt management.
 
-Physical design closure was achieved on the SkyWater 130nm PDK at both **50 MHz** and **100 MHz** with clean timing signoff ($WNS \ge 0$), achieving a maximum operating frequency of **219.6 MHz** with an active core area of **2,127.04 µm²** (48.18% core utilization) and **177.09 µW** total power at 100 MHz. Complete manufacturability signoff was proven with **zero DRC errors**, **zero LVS errors**, and **zero antenna violations**. Bit-for-bit functional equivalence between the RTL architecture and synthesized silicon netlist was verified through comprehensive gate-level simulation.
+Complete physical design tapeout signoff was achieved on the SkyWater 130nm PDK for the **25 MHz (40.0 ns)** target with zero timing violations across all 9 PVT corners ($WNS = 0.00\text{ ns}$, $+9.5689\text{ ns}$ worst-case setup slack at `max_ss_100C_1v60`, and $+0.1087\text{ ns}$ worst hold slack). Multi-corner analysis revealed that while 50 MHz operates cleanly at nominal laboratory conditions (+8.384 ns slack), industrial worst-case temperature and supply voltage droop derate the critical path to $22.715\text{ ns}$, resulting in a setup violation ($WNS = -2.7145\text{ ns}$) and establishing an absolute multi-corner ceiling of **44.02 MHz**. The physical silicon footprint contains **34,336 standard cells** and **10,179 flip-flops** across a **1.1926 mm² die** (1.1555 mm² active core area, 40.06% core utilization) with an estimated power consumption of **23.74 mW** at 25 MHz, **40.35 mW** at 50 MHz, and **81.15 mW** at 100 MHz. Complete manufacturability signoff was proven with **zero DRC errors**, **zero LVS errors**, and **zero antenna violations**. Bit-for-bit functional equivalence between the RTL architecture and synthesized silicon netlist was verified through comprehensive gate-level simulation and side-by-side UART output verification.

@@ -266,8 +266,8 @@ In `fw/src/startup.S`:
 
 ### Q25: Walk through the OpenLane 2 physical design stages from RTL to GDSII.
 **Answer:**  
-1. **Synthesis**: Yosys maps RTL to SkyWater 130nm standard cells; OpenROAD performs initial static timing analysis (STA).
-2. **Floorplanning**: Establishes die area ($57.36 \times 68.08\ \mu\text{m}$), core boundaries, I/O pin placement, and well-tap cell insertion.
+1. **Synthesis**: Yosys maps RTL to SkyWater 130nm standard cells (`sky130_fd_sc_hd`); OpenROAD performs initial static timing analysis (STA).
+2. **Floorplanning**: Establishes die area ($1086.73 \times 1097.45\ \mu\text{m}$, $1.1926\text{ mm}^2$), active core boundaries ($1.1555\text{ mm}^2$ at 40.06% core utilization), I/O pin placement, and well-tap cell insertion.
 3. **Power Distribution Network (PDN)**: Generates power and ground grids (`VPWR`/`VGND`) on metal layers Met4 and Met5.
 4. **Global Placement**: Positions standard cell instances across the core using analytical placement (Replace).
 5. **Detailed Placement**: Legalizes cell positions into discrete standard cell rows without overlaps.
@@ -275,24 +275,31 @@ In `fw/src/startup.S`:
 7. **Global Routing**: FastRoute creates routing guides across metal layers Met1–Met5.
 8. **Detailed Routing**: TritonRoute completes physical wire connections, resolving DRC design rules.
 9. **DFM / Fill Insertion**: Inserts decap and dummy fill cells to satisfy metal density rules.
-10. **Signoff**: Runs Magic DRC, KLayout DRC, Netgen LVS, antenna rule verification, and final STA. Generates the final GDSII layout.
+10. **Signoff**: Runs Magic DRC, KLayout DRC, Netgen LVS, antenna rule verification, and final multi-corner STA. Generates the final GDSII layout.
 
 ---
 
-### Q26: Explain the difference between Worst Setup Slack ($WSS$) and Worst Hold Slack ($WHS$).
+### Q26: Explain the difference between Worst Setup Slack ($WSS$), Worst Negative Slack ($WNS$), and multi-corner signoff.
 **Answer:**  
 - **Setup Time ($T_{setup}$)**: The minimum time data must remain stable *before* the active clock edge.
   $$\text{Setup Slack} = T_{clk} - (T_{cq} + T_{comb\_max} + T_{setup} + T_{skew})$$
-  A setup violation ($WSS < 0$) means the clock is toggling too fast for the combinational path. It can be fixed by lowering the operating frequency.
+  A setup violation ($Slack < 0$) means the path delay exceeds the clock period.
+- **Worst Negative Slack (WNS)**: Defined as $\min(0, \text{Worst Slack})$ across **all evaluated PVT corners**. A design only closes timing if $WNS = 0.00\text{ ns}$ across every operating corner.
+- **Why Multi-Corner Signoff Matters**:
+  A design may show positive slack at nominal conditions ($25^\circ\text{C}, 1.80\text{V}$, typical silicon) but fail in production under worst-case temperature and voltage droop.
+  For example, in MiniSoC-32 at 50 MHz ($T_{clk}=20.0\text{ ns}$):
+  - Nominal corner (`nom_tt_025C_1v80`): Slack is **+8.384 ns** ($F_{\max,nom} \approx 86.09\text{ MHz}$).
+  - Worst slow corner (`max_ss_100C_1v60`, 100°C, 1.60V): Carrier mobility drops and wire RC increases, stretching path delay to $22.715\text{ ns}$, yielding a setup slack of **-2.7145 ns** and **WNS = -2.7145 ns** (Failed multi-corner signoff).
+  - True multi-corner signoff was achieved at **25 MHz (40.0 ns)**, which provides **+9.5689 ns slack** at `max_ss_100C_1v60`, closing cleanly with **WNS = 0.00 ns** across all 9 PVT corners.
 - **Hold Time ($T_{hold}$)**: The minimum time data must remain stable *after* the active clock edge.
   $$\text{Hold Slack} = (T_{cq} + T_{comb\_min} - T_{skew}) - T_{hold}$$
-  A hold violation ($WHS < 0$) means data raced to the next flip-flop before the current clock edge finished latching. Hold violations **cannot be fixed by slowing the clock**—they result in non-functional silicon and must be resolved by inserting delay buffers during physical design.
+  Hold violations cannot be fixed by slowing the clock—they must be resolved during PnR by inserting delay buffers. MiniSoC-32 achieved zero hold violations across all corners ($WHS = +0.1087\text{ ns}$).
 
 ---
 
 ### Q27: How does Clock Tree Synthesis (CTS) prevent hold time violations?
 **Answer:**  
-CTS inserts a balanced network of clock inverters and buffers from the clock root pin to all sequential flip-flops. By balancing propagation delays, it minimizes **clock skew** (the arrival time difference between any two flip-flops). In MiniSoC-32, OpenLane's CTS achieved a worst-case skew of $\pm 0.25\ \text{ns}$, leaving a positive hold slack margin of $+0.116\ \text{ns}$.
+CTS inserts a balanced network of clock inverters and buffers from the clock root pin to all sequential flip-flops. By balancing propagation delays, it minimizes **clock skew** (the arrival time difference between any two flip-flops). In MiniSoC-32, OpenLane's CTS achieved balanced clock distribution across all 10,179 sequential flip-flops, leaving a positive hold slack margin of **+0.1087 ns** at the fastest corner (`min_ff_n40C_1v95`) and zero hold violations across all 9 corners.
 
 ---
 
@@ -314,9 +321,9 @@ LVS verifies that the physical geometry drawn in the GDSII layout exactly matche
 
 ### Q30: How were the power metrics calculated, and why does dynamic power scale linearly with frequency while leakage remains constant?
 **Answer:**  
-OpenROAD calculates power during signoff STA using Liberty (`.lib`) models:
+Power figures are **estimates** computed by OpenROAD Static Timing Analysis (STA) using Liberty (`.lib`) characterization tables under default switching activity assumptions (toggle rate $\alpha = 0.1$ at inputs):
 $$P_{total} = P_{internal} + P_{switching} + P_{leakage}$$
 - **Dynamic Power ($P_{internal} + P_{switching}$)**: Caused by charging and discharging parasitic capacitance ($C_{load}$) and momentary crowbar currents during CMOS transitions:
   $$P_{dyn} = C_{load} \cdot V_{DD}^2 \cdot f \cdot \alpha$$
-  Because $P_{dyn} \propto f$, increasing frequency from 50 MHz to 100 MHz doubled dynamic power from $82.53\ \mu\text{W}$ to $177.09\ \mu\text{W}$ ($2.14\times$ scaling).
-- **Leakage Power ($P_{leakage}$)**: Caused by sub-threshold conduction and gate oxide tunneling when transistors are idle. Because $V_{DD} = 1.8\text{ V}$ and temperature ($25^\circ\text{C}$) remained constant, leakage power stayed unchanged at **$1.50\ \text{nW}$**.
+  Because $P_{dyn} \propto f$, increasing frequency from 25 MHz to 50 MHz and 100 MHz scales estimated total power from **23.74 mW** (25 MHz) to **40.35 mW** (50 MHz) and **81.15 mW** (100 MHz) ($2.01\times$ scaling between 50 and 100 MHz).
+- **Leakage Power ($P_{leakage}$)**: Caused by sub-threshold conduction and gate oxide tunneling when transistors are idle. Because supply voltage and temperature remained constant, leakage power remained negligible ($0.39$ to $0.82\ \mu\text{W}$).

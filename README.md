@@ -159,10 +159,13 @@ yosys -s syn/synth.ys
 
 ### 4. Run OpenLane 2 Physical Design (RTL-to-GDSII)
 ```bash
-# 50 MHz run
+# 25 MHz Signoff run (Closes across ALL 9 PVT corners)
+openlane --dockerized pd/config_40ns.json
+
+# 50 MHz run (Multi-corner comparison)
 openlane --dockerized pd/config_50mhz.json
 
-# 100 MHz run
+# 100 MHz run (Failed target / timing exploration)
 openlane --dockerized pd/config_100mhz.json
 ```
 
@@ -172,6 +175,7 @@ python3 scripts/prepare_gls.py
 iverilog -g2012 -o /tmp/tb_gls.vvp /usr/share/yosys/simlib.v syn/reports/minisoc_top_gls.v tb/system/tb_minisoc_top_gls.sv
 vvp /tmp/tb_gls.vvp
 ```
+*RTL and Gate-Level UART execution logs are saved side by side in [`docs/logs/uart_rtl.log`](file:///home/manthan/minisoc/docs/logs/uart_rtl.log) and [`docs/logs/uart_gls.log`](file:///home/manthan/minisoc/docs/logs/uart_gls.log).*
 
 ### 6. Run Complete Pipeline (Regression + Synthesis + GLS)
 ```bash
@@ -182,17 +186,39 @@ bash scripts/run_all.sh
 
 ## Physical Design Signoff Summary (SkyWater 130nm)
 
-| Metric | 50 MHz Target | 100 MHz Target | Signoff Status |
-| :--- | :--- | :--- | :--- |
-| **Clock Period ($T_{clk}$)** | 20.00 ns | 10.00 ns | Met ✅ |
-| **Setup Slack (WSS)** | +13.43 ns | +5.45 ns | Met (WNS = 0.00 ns) ✅ |
-| **Hold Slack (WHS)** | +0.115 ns | +0.116 ns | Met (Zero violations) ✅ |
-| **Critical Path Delay** | 4.57 ns | 4.55 ns | Register file to ALU comparator |
-| **Maximum Frequency ($F_{max}$)** | 218.8 MHz | 219.6 MHz | In SkyWater 130nm HD cells |
-| **Total Power Dissipation** | 82.53 µW | 177.09 µW | Dynamic frequency scaling |
-| **Die Dimensions** | 57.36 × 68.08 µm | 57.36 × 68.08 µm | 3,905.07 µm² die area |
-| **Standard Cell Area** | 1,020.98 µm² | 1,024.73 µm² | Core utilization: 48.18% |
-| **DRC / LVS / Antenna** | 0 / 0 / 0 | 0 / 0 / 0 | 100% Clean Signoff ✅ |
+| Metric | 25 MHz (Signoff Target) | 50 MHz (Multi-Corner Failure) | 100 MHz (Failed Target) | Signoff Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Clock Period ($T_{clk}$)** | **40.00 ns** | **20.00 ns** | **10.00 ns** | 25 MHz closes all corners ✅ |
+| **Overall Setup WNS (Worst Across All Corners)** | **0.0000 ns** | **-2.7145 ns** | **-12.0448 ns** | Read from `metrics.json` |
+| **Worst Setup Slack ($WS$)** | **+9.5689 ns** (Met ✅) | **-2.7145 ns** (Violated ⚠️) | **-12.0448 ns** (Violated ⚠️) | At extreme slow `max_ss_100C_1v60` |
+| **Overall Hold WNS** | **0.0000 ns** (Met ✅) | **0.0000 ns** (Met ✅) | **-0.4350 ns** (Violated ⚠️) | Zero hold violations at 25/50 MHz |
+| **Worst Hold Slack ($WS$)** | **+0.1087 ns** (Met ✅) | **+0.1091 ns** (Met ✅) | **-0.4350 ns** (Violated ⚠️) | Clean hold margin across corners |
+| **Nominal Setup Slack (`nom_tt_025C_1v80`)** | **+25.3838 ns** | **+8.3836 ns** | **-1.2406 ns** | 50 MHz meets nominal only |
+| **Worst-Case Path Delay ($T_{crit,worst}$)** | **30.4311 ns** | **22.7145 ns** | **22.0448 ns** | At `max_ss_100C_1v60` (100°C, 1.6V) |
+| **Highest Frequency Closing Across All Corners** | **32.86 MHz** | **44.02 MHz** | **45.36 MHz** | Absolute physical multi-corner limit |
+| **Estimated Total Power (Nominal)** | **23.74 mW** | **40.35 mW** | **81.15 mW** | OpenROAD STA activity estimate |
+| **Estimated Total Power (Worst Corner)** | **23.74 mW** | **47.53 mW** | **95.56 mW** | OpenROAD STA activity estimate |
+| **Die Dimensions / Total Area** | 1086.73 × 1097.45 µm | 1086.73 × 1097.45 µm | 1086.73 × 1097.45 µm | 1.1926 mm² (1,192,620 µm² die area) |
+| **Standard Cell Area / Utilization** | 462,841.40 µm² | 462,841.40 µm² | 462,841.40 µm² | Core area: 1.155 mm² (40.06% util) |
+| **Standard Cells / Flip-Flops** | 34,336 cells / 10,179 DFFs | 34,336 cells / 10,179 DFFs | 34,336 cells / 10,179 DFFs | 67,820 / 67,805 / 67,887 placed cells |
+| **DRC / LVS / Antenna Signoff** | **0 / 0 / 0** | **0 / 0 / 0** | **0 / 0 / 0** | 100% Clean Physical Signoff ✅ |
+
+> [!NOTE]
+> All power dissipation values reported are **estimates** from OpenROAD Static Timing Analysis based on Liberty standard-cell models and default input switching activity factors (0.1).
+
+### Multi-Corner Setup Slack Overview (9 PVT Corners)
+| PVT Corner | 25 MHz Setup (40 ns) | 50 MHz Setup (20 ns) | 100 MHz Setup (10 ns) | Multi-Corner Signoff Status |
+| :--- | :--- | :--- | :--- | :--- |
+| `max_ff_n40C_1v95` | **+27.8817 ns** | **+12.3137 ns** | **+2.5288 ns** | Met across all targets ✅ |
+| `min_ff_n40C_1v95` | **+28.2086 ns** | **+12.6551 ns** | **+3.0368 ns** | Met across all targets ✅ |
+| `nom_ff_n40C_1v95` | **+28.0429 ns** | **+12.4783 ns** | **+2.8036 ns** | Met across all targets ✅ |
+| `min_tt_025C_1v80` | **+25.7755 ns** | **+8.6703 ns** | **-1.0134 ns** | 100 MHz Violated ⚠️ |
+| `nom_tt_025C_1v80` | **+25.3838 ns** | **+8.3836 ns** | **-1.2406 ns** | 100 MHz Violated ⚠️ |
+| `max_tt_025C_1v80` | **+25.0058 ns** | **+8.1175 ns** | **-1.4867 ns** | 100 MHz Violated ⚠️ |
+| `min_ss_100C_1v60` | **+10.9612 ns** | **-1.7441 ns** | **-11.2030 ns** | 50 & 100 MHz Violated ⚠️ |
+| `nom_ss_100C_1v60` | **+10.2601 ns** | **-2.2533 ns** | **-11.6009 ns** | 50 & 100 MHz Violated ⚠️ |
+| `max_ss_100C_1v60` | **+9.5689 ns** | **-2.7145 ns** | **-12.0448 ns** | **Worst Slow Corner (WNS)** |
+| **Overall Signoff**| **Met (WNS=0.00ns)** | **Failed (WNS=-2.71ns)** | **Failed (WNS=-12.04ns)** | **25 MHz Fully Signed Off** ✅ |
 
 ---
 

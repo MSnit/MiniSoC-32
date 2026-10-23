@@ -4,7 +4,60 @@
 
 ---
 
-## 2026-10-22 — Physical Design (OpenLane 2 SkyWater 130nm) & Gate-Level Simulation (GLS)
+## 2026-10-23 — Multi-Corner Physical Signoff (25 MHz), Failed Target Analysis, and Evidence Logging
+
+### 🎯 Key Accomplishments
+1. **Parametrized ROM Hex Path**:
+   - Refactored `rtl/mem/irom.sv` and `rtl/top/minisoc_top.sv` to define `parameter ROM_FILE = "pd/firmware.hex"`.
+   - Updated all OpenLane configuration JSONs (`pd/config.json`, `pd/config_50mhz.json`, `pd/config_100mhz.json`, `pd/config_40ns.json`, `pd/config_30ns.json`) with `"SYNTH_PARAMETERS": ["ROM_FILE=\"pd/firmware.hex\""]`. Fresh clones now synthesize reliably without hardcoded absolute paths.
+2. **Multi-Corner Timing Signoff at 25 MHz (40.0 ns, `RUN_2026-10-23_11-24-42`)**:
+   - Closed setup and hold timing across **ALL 9 PVT corners** (`timing__setup__ws >= 0`, `timing__hold__ws >= 0`).
+   - Worst Setup Slack across all corners: **+9.5689 ns** (at extreme slow corner `max_ss_100C_1v60`), yielding **Overall Setup WNS = 0.0000 ns** and **Setup TNS = 0.0000 ns** (0 violations).
+   - Worst Hold Slack across all corners: **+0.1087 ns** (at fast corner `min_ff_n40C_1v95`), yielding **Overall Hold WNS = 0.0000 ns**.
+   - Estimated Total Power: **23.74 mW** (OpenROAD STA switching activity estimation).
+3. **Multi-Corner Failure Analysis (50 MHz & 100 MHz)**:
+   - **50 MHz (20.0 ns)**: Met nominal timing (+8.384 ns), but failed multi-corner signoff at slow corners (`max_ss_100C_1v60`: Setup Slack = **-2.7145 ns**, **WNS = -2.7145 ns**, TNS = -572.41 ns).
+   - **100 MHz (10.0 ns)**: Failed nominal (-1.2406 ns) and slow corners (Setup Slack = **-12.0448 ns**, **WNS = -12.0448 ns**, TNS = -7343.60 ns).
+   - Identified critical path root cause: combinational unpipelined Wishbone request path from EX-stage ALU output comparator through interconnect address decoder to peripheral registers.
+   - Identified absolute multi-corner physical frequency ceiling: **44.02 MHz** ($T_{crit,worst} = 22.715\text{ ns}$).
+4. **Side-by-Side Simulation Evidence Saved**:
+   - Preserved RTL simulation log in [`docs/logs/uart_rtl.log`](file:///home/manthan/minisoc/docs/logs/uart_rtl.log) (`PASS: soc_tb`, `GPIO_OUT = 0xff`).
+   - Preserved full gate-level simulation log in [`docs/logs/uart_gls.log`](file:///home/manthan/minisoc/docs/logs/uart_gls.log) (`PASS: minisoc_top_gls`, `GPIO_OUT = 0xff`).
+5. **Documentation Harmonization**:
+   - Updated `README.md`, `docs/REPORT.md`, `docs/RESULTS.md`, and `docs/VIVA_QA.md` so that WNS is reported as the worst across ALL corners, full 9-corner slack tables are documented, power figures are identified as estimates, and 50/100 MHz are documented as multi-corner failures with architectural fixes explained.
+
+---
+
+### 🔍 Investigation & Root Cause Resolution
+1. **Identified Synthesis Shrinkage Root Cause (`docs/INVESTIGATION.md`)**:
+   - The initial OpenLane synthesis shrunk to 140 cells because `rtl/mem/irom.sv` contained an initial procedural loop `for (i=0; i<MEM_DEPTH; i++) mem[i] = 32'd0;` which Yosys elaborated into 1,024 unclocked `$memwr` cells writing constant zero, overriding `$readmemh` when running out-of-tree in OpenLane.
+   - All instructions evaluated to `0x0000_0000`, which in RV32I decodes with zero register writes, zero memory accesses, and zero branches. Yosys optimizer eliminated the entire CPU, memories, and peripherals as dead logic, leaving only 14 autonomous SPI shift flops.
+2. **RTL & Firmware Fixes**:
+   - `rtl/mem/irom.sv`: Removed procedural loop and pointed default path to absolute path `/home/manthan/minisoc/pd/firmware.hex`.
+   - `rtl/mem/dram.sv`: Right-sized flop-based Data RAM to 1 KB (256 words = 8,192 flip-flops) using dynamic address decoding. Added `// synthesis translate_off` around simulation-only zeroing loop.
+   - `fw/link.ld`: Updated DRAM size to 1 KB (`LENGTH = 1K`). Rebuilt firmware with `make -C fw clean all demos`. Confirmed 13/13 test regression suite passes (`scripts/regress.sh`).
+   - Verified pre-flatten Yosys hierarchy: full CPU (176 cells, 82 DFFs, 1,024-bit regfile), Wishbone interconnect (77 cells), 4 KB ROM, 1 KB RAM (8,192 flops), and all peripherals survived.
+
+### ✅ Done
+- **50 MHz Signoff Run (`pd/runs/RUN_2026-10-23_05-58-37`)**:
+  - Synthesized **34,336 standard cells** and **10,179 sequential flip-flops** (`sky130_fd_sc_hd__dfxtp_2`), standard-cell area: 462,841.40 µm².
+  - Floorplan: 1.1926 mm² die (1086.73 µm × 1097.45 µm), 1.1555 mm² core, 40.06% utilization.
+  - CTS: 10,179 clock sinks balanced, 1,249 buffers inserted.
+  - Detailed Routing: 369,824 vias, 2.35 m wire length, 0 route DRC violations.
+  - Timing Signoff (`nom_tt_025C_1v80`): Setup WS = **+8.384 ns** (WNS = 0.00 ns), Hold WS = **+0.330 ns**, $F_{\max} = \mathbf{86.09\text{ MHz}}$.
+  - Power: **40.35 mW** at nominal conditions (Internal: 29.69 mW, Switching: 10.66 mW, Leakage: 0.39 µW).
+  - Physical Verification: **0 Magic DRC violations**, **0 KLayout DRC violations**, **0 Netgen LVS errors**, **0 XOR diffs**.
+- **100 MHz Comparison Run (`pd/runs/RUN_2026-10-23_08-13-49`)**:
+  - Floorplan & Area: Identical 1.1926 mm² die, 34,336 synthesized cells, 10,179 flip-flops.
+  - Placed Standard Cells: 67,887 (increased buffer sizing to attempt 10.0 ns closure).
+  - Timing Signoff: Setup WS = **-1.241 ns** ($F_{\max} \approx \mathbf{88.96\text{ MHz}}$) at nominal corner; closes cleanly at fast corner (`nom_ff_n40C_1v95`) with **+2.804 ns** slack ($F_{\max} \approx 138.96\text{ MHz}$).
+  - Critical path traced through EX ALU comparator to Wishbone address decode multiplexer.
+  - Power: **81.15 mW** at nominal conditions (exhibits exact $2.01\times$ dynamic scaling over 50 MHz).
+  - Physical Verification: **0 Magic DRC violations**, **0 KLayout DRC violations**, **0 Netgen LVS errors**, **0 XOR diffs**.
+- **Gate-Level Simulation (GLS)**:
+  - Compiled and executed full-chip GLS with SkyWater 130nm gate models (`primitives.v`, `sky130_fd_sc_hd.v`) against `minisoc_top.nl.v`. Executing self-test firmware cleanly over UART TX.
+- **Documentation**:
+  - Updated `docs/RESULTS.md`, `README.md`, `docs/REPORT.md`, and `docs/VIVA_QA.md` with authentic numbers from the reports.
 
 ### ✅ Done
 - **Synthesis & PnR Flow Multi-Frequency Comparison**:

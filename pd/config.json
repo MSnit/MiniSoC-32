@@ -22,6 +22,8 @@
   "FP_CORE_UTIL": 40,
   "PL_TARGET_DENSITY": 0.45,
   "ROUTING_CORES": 4,
+  "DRT_THREADS": 8,
+  "SYNTH_PARAMETERS": ["ROM_FILE=\"pd/firmware.hex\""],
   "PDK": "sky130A",
   "STD_CELL_LIBRARY": "sky130_fd_sc_hd"
 }

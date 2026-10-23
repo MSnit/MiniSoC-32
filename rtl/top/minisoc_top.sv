@@ -10,7 +10,7 @@
 module minisoc_top #(
     parameter CLOCK_FREQ = 50_000_000,
     parameter BAUD_RATE  = 115_200,
-    parameter ROM_FILE   = "firmware.hex"
+    parameter ROM_FILE   = "pd/firmware.hex"
 ) (
 /* verilator lint_on UNUSEDPARAM */
     input  logic        clk,
@@ -217,7 +217,7 @@ module minisoc_top #(
     // =========================================================================
     // DRAM instance
     // =========================================================================
-    dram #(.MEM_DEPTH(1024)) dram_inst (
+    dram #(.MEM_DEPTH(256)) dram_inst (
         .clk      (clk),     .rst_n    (rst_n),
         .wb_adr   (dram_adr_s),   .wb_dat_o (dram_dat_o_s),
         .wb_we    (dram_we_s),    .wb_sel   (dram_sel_s),

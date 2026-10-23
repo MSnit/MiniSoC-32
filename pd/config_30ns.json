@@ -1,0 +1,34 @@
+{
+  "DESIGN_NAME": "minisoc_top",
+  "VERILOG_FILES": [
+    "dir::../rtl/cpu/regfile.sv",
+    "dir::../rtl/cpu/csr_regfile.sv",
+    "dir::../rtl/cpu/hazard_unit.sv",
+    "dir::../rtl/cpu/alu.sv",
+    "dir::../rtl/cpu/imm_gen.sv",
+    "dir::../rtl/cpu/control.sv",
+    "dir::../rtl/cpu/rv32i_cpu.sv",
+    "dir::../rtl/bus/wb_interconnect.sv",
+    "dir::../rtl/mem/irom.sv",
+    "dir::../rtl/mem/dram.sv",
+    "dir::../rtl/periph/uart.sv",
+    "dir::../rtl/periph/spi_master.sv",
+    "dir::../rtl/periph/gpio.sv",
+    "dir::../rtl/periph/timer.sv",
+    "dir::../rtl/top/minisoc_top.sv"
+  ],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 30.0,
+  "FP_CORE_UTIL": 40,
+  "PL_TARGET_DENSITY_PCT": 45,
+  "DRT_THREADS": 8,
+  "SYNTH_PARAMETERS": [
+    "ROM_FILE=\"pd/firmware.hex\""
+  ],
+  "RUN_MAGIC_DRC": false,
+  "RUN_KLAYOUT_DRC": false,
+  "RUN_LVS": false,
+  "RUN_KLAYOUT_XOR": false,
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd"
+}

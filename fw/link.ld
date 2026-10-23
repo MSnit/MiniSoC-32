@@ -6,7 +6,7 @@
 
 MEMORY {
     IROM (rx)  : ORIGIN = 0x00000000, LENGTH = 4K
-    DRAM (rwx) : ORIGIN = 0x00010000, LENGTH = 4K
+    DRAM (rwx) : ORIGIN = 0x00010000, LENGTH = 1K
 }
 
 ENTRY(_start)
